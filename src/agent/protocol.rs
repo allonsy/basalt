@@ -11,14 +11,14 @@ pub enum Request {
 
 #[derive(Serialize, Deserialize)]
 pub struct DecryptRequest {
-    private_key_id: String,
-    payload: String,
+    pub private_key_id: String,
+    pub payload: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SignRequest {
-    private_key_id: String,
-    payload: String,
+    pub private_key_id: String,
+    pub payload: String,
 }
 
 #[derive(Serialize, Deserialize)]

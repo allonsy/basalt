@@ -7,11 +7,13 @@ use super::read_message;
 use super::send_message;
 use crate::config;
 use crate::keys;
+use crate::util;
 use std::collections::HashMap;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::thread;
 
 type SharedState = Arc<Mutex<ServerState>>;
@@ -81,6 +83,65 @@ fn handle_request(st: SharedState, req: protocol::Request) -> protocol::Response
                 protocol::Response::Success("DONE".to_string())
             }
         }
+        protocol::Request::Decrypt(decrypt_arguments) => decrypt_packet(st, decrypt_arguments),
+        protocol::Request::Sign(sign_arguments) => sign_packet(st, sign_arguments),
         _ => protocol::Response::Failure("Unimplemented Server Request".to_string()),
     }
+}
+
+fn decrypt_packet(st: SharedState, decrypt: protocol::DecryptRequest) -> protocol::Response {
+    let locked_state = st.lock();
+    if locked_state.is_err() {
+        return protocol::Response::Failure(format!(
+            "shared state is poisoned: {}",
+            locked_state.err().unwrap()
+        ));
+    }
+    let locked_state = locked_state.unwrap();
+    let key = locked_state.keys.get(&decrypt.private_key_id);
+    if key.is_none() {
+        return protocol::Response::Failure(format!(
+            "Unable to find key: {}",
+            decrypt.private_key_id
+        ));
+    }
+    let key = key.unwrap();
+    let ciphertext = util::base32_decode(&decrypt.payload);
+    if ciphertext.is_none() {
+        return protocol::Response::Failure("Unable to parse base32 encoded payload".to_string());
+    }
+    let ciphertext = ciphertext.unwrap();
+    let plaintext = key.decrypt(&ciphertext);
+    if plaintext.is_err() {
+        return protocol::Response::Failure("Unable to decrypt packet".to_string());
+    }
+    let plaintext = plaintext.unwrap();
+    let encoded_plaintext = util::base32_encode(&plaintext);
+    protocol::Response::Success(encoded_plaintext)
+}
+
+fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Response {
+    let locked_state = st.lock();
+    if locked_state.is_err() {
+        return protocol::Response::Failure(format!(
+            "shared state is poisoned: {}",
+            locked_state.err().unwrap()
+        ));
+    }
+    let locked_state = locked_state.unwrap();
+    let key = locked_state.keys.get(&sign.private_key_id);
+    if key.is_none() {
+        return protocol::Response::Failure(format!("Unable to find key: {}", sign.private_key_id));
+    }
+    let key = key.unwrap();
+    let message = util::base32_decode(&sign.payload);
+    if message.is_none() {
+        return protocol::Response::Failure(
+            "Unable to base32 decode sign packet payload".to_string(),
+        );
+    }
+    let message = message.unwrap();
+    let signed_message = key.sign(&message);
+    let encoded_signed_message = util::base32_encode(&signed_message);
+    protocol::Response::Success(encoded_signed_message)
 }
