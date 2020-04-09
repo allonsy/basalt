@@ -1,3 +1,4 @@
+mod pinentry;
 mod protocol;
 mod server;
 use std::io::Read;

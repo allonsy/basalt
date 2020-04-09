@@ -8,12 +8,12 @@ use super::send_message;
 use crate::config;
 use crate::keys;
 use crate::util;
+use nix::unistd;
 use std::collections::HashMap;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::MutexGuard;
 use std::thread;
 
 type SharedState = Arc<Mutex<ServerState>>;
@@ -32,6 +32,26 @@ pub fn start_server() -> Result<(), String> {
             listener.err().unwrap(),
         ));
     }
+
+    let fork_res = unistd::fork();
+    if fork_res.is_err() {
+        return Err(format!(
+            "Unable to spawn server daemon: {}",
+            fork_res.err().unwrap()
+        ));
+    }
+    let fork_res = fork_res.unwrap();
+    if fork_res.is_parent() {
+        return Ok(());
+    }
+    let setsid_result = unistd::setsid();
+    if setsid_result.is_err() {
+        return Err(format!(
+            "Unable to detach server daemon: {}",
+            setsid_result.err().unwrap()
+        ));
+    }
+
     let shared_state = Arc::new(Mutex::new(ServerState {
         keys: HashMap::new(),
     }));
@@ -145,3 +165,5 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
     let encoded_signed_message = util::base32_encode(&signed_message);
     protocol::Response::Success(encoded_signed_message)
 }
+
+// fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {}
