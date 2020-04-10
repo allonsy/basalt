@@ -1,6 +1,9 @@
+mod client;
 mod pinentry;
 mod protocol;
 mod server;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
@@ -27,75 +30,35 @@ fn send_message(conn: &mut UnixStream, msg: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn read_message(conn: &mut UnixStream) -> Result<String, String> {
-    let mut overflow = Vec::new();
-    let mut size_buffer = [0; 16];
-    let mut size_vec = Vec::new();
-    let mut message_size = 0;
-    let mut done = false;
-    while done == false {
-        let num_read = conn.read(&mut size_buffer);
-        if num_read.is_err() {
-            return Err(format!(
-                "Unable to read from socket: {}",
-                num_read.err().unwrap()
-            ));
-        }
-        let num_read = num_read.unwrap();
-        if num_read == 0 {
-            return Err(format!("Incomplete message received"));
-        }
-
-        let mut to_size_buffer = true;
-        for byte in &size_buffer[0..num_read] {
-            if to_size_buffer {
-                if *byte == 0xA {
-                    let size_string = String::from_utf8(size_vec.clone());
-                    if size_string.is_err() {
-                        return Err(format!(
-                            "Unable to parse size line: {}",
-                            size_string.err().unwrap()
-                        ));
-                    }
-                    let size_string = size_string.unwrap();
-                    let parsed_size = size_string.parse::<usize>();
-                    if parsed_size.is_err() {
-                        return Err(format!(
-                            "Unable to parse size line: {}",
-                            parsed_size.err().unwrap()
-                        ));
-                    }
-                    message_size = parsed_size.unwrap();
-                    done = true;
-                    to_size_buffer = false;
-                } else {
-                    size_vec.push(*byte);
-                }
-            } else {
-                overflow.push(*byte);
-                message_size -= 1;
-            }
-        }
+fn read_message(conn: &mut BufReader<&UnixStream>) -> Result<String, String> {
+    let mut size_line = String::new();
+    let line_result = conn.read_line(&mut size_line);
+    if line_result.is_err() {
+        return Err(format!(
+            "Unable to read size line: {}",
+            line_result.unwrap_err()
+        ));
     }
-
-    let mut message_buffer = Vec::with_capacity(message_size);
-    for _ in 0..message_size {
-        message_buffer.push(0);
+    if line_result.unwrap() == 0 {
+        return Err("No size line provided".to_string());
     }
-    let message_result = conn.read_exact(message_buffer.as_mut_slice());
+    let size = size_line.trim().parse::<usize>();
+    if size.is_err() {
+        return Err(format!("Unable to parse size line: {}", size.unwrap_err()));
+    }
+    let size = size.unwrap();
+
+    let mut message_buf = Vec::new();
+    for _ in 0..size {
+        message_buf.push(0);
+    }
+    let message_result = conn.read_exact(&mut message_buf);
     if message_result.is_err() {
-        return Err(format!(
+        Err(format!(
             "Unable to read message: {}",
-            message_result.err().unwrap()
-        ));
+            message_result.unwrap_err()
+        ))
+    } else {
+        String::from_utf8(message_buf).map_err(|e| format!("Unable to parse message: {}", e))
     }
-    overflow.extend_from_slice(&message_buffer);
-    let message = String::from_utf8(overflow);
-    if message.is_err() {
-        return Err(format!(
-            "Unable to parse message: {}",
-            message.err().unwrap()
-        ));
-    }
-    Ok(message.unwrap())
 }

@@ -27,15 +27,15 @@ pub enum Response {
     Failure(String),
 }
 
-pub fn serialize_request(req: &Request) -> String {
+pub fn serialize_request(req: &Vec<Request>) -> String {
     serde_json::to_string(req).unwrap()
 }
 
-pub fn serialize_response(resp: &Response) -> String {
+pub fn serialize_response(resp: &Vec<Response>) -> String {
     serde_json::to_string(resp).unwrap()
 }
 
-pub fn deserialize_request(msg: &str) -> Result<Request, String> {
+pub fn deserialize_request(msg: &str) -> Result<Vec<Request>, String> {
     let req = serde_json::from_str(msg);
     if req.is_err() {
         Err(format!("Unable to parse message: {}", req.err().unwrap()))
@@ -44,7 +44,7 @@ pub fn deserialize_request(msg: &str) -> Result<Request, String> {
     }
 }
 
-pub fn deserialize_response(msg: &str) -> Result<Request, String> {
+pub fn deserialize_response(msg: &str) -> Result<Vec<Response>, String> {
     let resp = serde_json::from_str(msg);
     if resp.is_err() {
         Err(format!("Unable to parse response: {}", resp.err().unwrap()))

@@ -52,12 +52,12 @@ fn get_keys() -> (Box<dyn PublicKey>, Box<dyn PrivateKey>) {
 
 fn read_private_key(path: &Path) -> Box<dyn PrivateKey> {
     let json = read_json_file(path);
-    let sec_key = parse::deserialize::parse_private_key_json(json.clone(), None);
+    let sec_key = parse::deserialize::parse_private_key_json(&json, None);
     match sec_key {
         Ok(k) => k,
         Err(ParseError::MissingPassword) => {
             let pwd = prompt_user("Please enter a password for the key");
-            parse::deserialize::parse_private_key_json(json, Some(pwd.as_str())).unwrap()
+            parse::deserialize::parse_private_key_json(&json, Some(pwd.as_str())).unwrap()
         }
         _ => sec_key.unwrap(),
     }
@@ -65,7 +65,7 @@ fn read_private_key(path: &Path) -> Box<dyn PrivateKey> {
 
 fn read_public_key(path: &Path) -> Box<dyn PublicKey> {
     let json = read_json_file(path);
-    parse::deserialize::parse_public_key_json(json).unwrap()
+    parse::deserialize::parse_public_key_json(&json).unwrap()
 }
 
 fn read_json_file(path: &Path) -> Value {

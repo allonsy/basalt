@@ -1,3 +1,4 @@
+use super::pinentry;
 use super::protocol;
 use super::protocol::deserialize_request;
 use super::protocol::deserialize_response;
@@ -7,11 +8,17 @@ use super::read_message;
 use super::send_message;
 use crate::config;
 use crate::keys;
+use crate::parse::deserialize;
 use crate::util;
 use nix::unistd;
+use serde_json;
 use std::collections::HashMap;
+use std::fs;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -69,10 +76,11 @@ pub fn start_server() -> Result<(), String> {
 }
 
 fn handle_connection(st: SharedState, mut conn: UnixStream) {
-    let message = read_message(&mut conn);
+    let mut reader = BufReader::new(&conn);
+    let message = read_message(&mut reader);
     if message.is_err() {
         let resp = protocol::Response::Failure(message.err().unwrap());
-        let resp_message = serialize_response(&resp);
+        let resp_message = serialize_response(&vec![resp]);
         send_message(&mut conn, &resp_message);
         return;
     }
@@ -81,7 +89,7 @@ fn handle_connection(st: SharedState, mut conn: UnixStream) {
     let request = deserialize_request(&message);
     if request.is_err() {
         let resp = protocol::Response::Failure(request.err().unwrap());
-        let resp_message = serialize_response(&resp);
+        let resp_message = serialize_response(&vec![resp]);
         send_message(&mut conn, &resp_message);
         return;
     }
@@ -91,22 +99,29 @@ fn handle_connection(st: SharedState, mut conn: UnixStream) {
     send_message(&mut conn, &resp_message);
 }
 
-fn handle_request(st: SharedState, req: protocol::Request) -> protocol::Response {
-    match req {
-        protocol::Request::Hello => protocol::Response::Success("HELLO".to_string()),
-        protocol::Request::Clear => {
-            let st = st.lock();
-            if st.is_err() {
-                protocol::Response::Failure("Internal server state is poisoned".to_string())
-            } else {
-                st.unwrap().keys = HashMap::new();
-                protocol::Response::Success("DONE".to_string())
+fn handle_request(st: SharedState, requests: Vec<protocol::Request>) -> Vec<protocol::Response> {
+    let mut responses = Vec::new();
+    for req in requests {
+        let resp = match req {
+            protocol::Request::Hello => protocol::Response::Success("HELLO".to_string()),
+            protocol::Request::Clear => {
+                let st = st.lock();
+                if st.is_err() {
+                    protocol::Response::Failure("Internal server state is poisoned".to_string())
+                } else {
+                    st.unwrap().keys = HashMap::new();
+                    protocol::Response::Success("DONE".to_string())
+                }
             }
-        }
-        protocol::Request::Decrypt(decrypt_arguments) => decrypt_packet(st, decrypt_arguments),
-        protocol::Request::Sign(sign_arguments) => sign_packet(st, sign_arguments),
-        _ => protocol::Response::Failure("Unimplemented Server Request".to_string()),
+            protocol::Request::Decrypt(decrypt_arguments) => {
+                decrypt_packet(st.clone(), decrypt_arguments)
+            }
+            protocol::Request::Sign(sign_arguments) => sign_packet(st.clone(), sign_arguments),
+            _ => protocol::Response::Failure("Unimplemented Server Request".to_string()),
+        };
+        responses.push(resp);
     }
+    responses
 }
 
 fn decrypt_packet(st: SharedState, decrypt: protocol::DecryptRequest) -> protocol::Response {
@@ -166,4 +181,20 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
     protocol::Response::Success(encoded_signed_message)
 }
 
-// fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {}
+fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {
+    let private_key_file_name = config::get_app_dir()
+        .join("keys")
+        .join(format!("{}.priv", key_name));
+    let private_key = fs::read_to_string(private_key_file_name).ok()?;
+    let private_key_json: serde_json::Value = serde_json::from_str(&private_key).ok()?;
+
+    let parsed_key = deserialize::parse_private_key_json(&private_key_json, None);
+    match parsed_key {
+        Ok(key) => Some(key),
+        Err(deserialize::ParseError::MissingPassword) => {
+            let pin = pinentry::get_pin(key_name).ok()?;
+            deserialize::parse_private_key_json(&private_key_json, Some(&pin)).ok()
+        }
+        _ => None,
+    }
+}

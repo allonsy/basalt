@@ -23,9 +23,9 @@ pub enum ParseError {
 }
 
 pub fn parse_private_key_json(
-    json: Value,
+    json: &Value,
     pwd: Option<&str>,
-) -> Result<Box<dyn PrivateKey>, ParseError> {
+) -> Result<Box<dyn PrivateKey + Send>, ParseError> {
     let map = json.as_object();
     if map.is_none() {
         return Err(ParseError::JsonError(
@@ -48,7 +48,7 @@ pub fn parse_private_key_json(
     }
 }
 
-pub fn parse_public_key_json(json: Value) -> Result<Box<dyn PublicKey>, ParseError> {
+pub fn parse_public_key_json(json: &Value) -> Result<Box<dyn PublicKey>, ParseError> {
     match json {
         Value::Object(map) => parse_public_key_map(&map),
         _ => Err(ParseError::JsonError("JSON isn't an object".to_string())),
@@ -127,7 +127,7 @@ fn parse_sodium_private_key(
     device_id: &str,
     map: &Map<String, Value>,
     pwd: Option<&str>,
-) -> Result<Box<dyn PrivateKey>, ParseError> {
+) -> Result<Box<dyn PrivateKey + Send>, ParseError> {
     let enc_key = if map.contains_key(super::ENCRYPTION_KEY_SALT_NAME) {
         if pwd.is_none() {
             return Err(ParseError::MissingPassword);
