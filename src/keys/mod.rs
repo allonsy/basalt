@@ -3,6 +3,8 @@ use crate::util;
 pub use sodium::SodiumPrivateKey;
 pub use sodium::SodiumPublicKey;
 
+pub const KEY_TYPES: &'static [&'static str] = &["Sodium"];
+
 pub struct KeySignature {
     pub public_key_id: String,
     pub signing_key_id: String,

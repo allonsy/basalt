@@ -80,11 +80,3 @@ fn write_json(val: serde_json::Value, filename: &Path) {
     let mut file = File::create(filename).unwrap();
     file.write_all(json_string.as_bytes()).unwrap();
 }
-
-fn prompt_user(prompt: &str) -> String {
-    let mut input = String::new();
-    print!("{}: ", prompt);
-    std::io::stdout().flush().unwrap();
-    std::io::stdin().read_line(&mut input).unwrap();
-    input.trim().to_string()
-}
