@@ -198,3 +198,23 @@ fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {
         _ => None,
     }
 }
+
+fn query_pin(
+    key_name: &str,
+    json: &serde_json::Value,
+    num_retries: usize,
+) -> Option<Box<dyn keys::PrivateKey + Send>> {
+    for _ in 0..num_retries {
+        let pin = pinentry::get_pin(key_name).ok()?;
+        match deserialize::parse_private_key_json(&json, Some(&pin)) {
+            Ok(key) => {
+                return Some(key);
+            }
+            Err(deserialize::ParseError::DecryptError) => {}
+            _ => {
+                return None;
+            }
+        }
+    }
+    None
+}
