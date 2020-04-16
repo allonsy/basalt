@@ -33,8 +33,8 @@ fn get_keys() -> (Box<dyn PublicKey>, Box<dyn PrivateKey>) {
         return (pub_key, sec_key);
     } else {
         println!("No secret key detected");
-        let device_id = prompt_user("Please enter a device name");
-        let password = prompt_user("Please enter a password");
+        let device_id = util::prompt_user("Please enter a device name");
+        let password = util::prompt_user("Please enter a password");
         let password_opt = if password.is_empty() {
             None
         } else {
@@ -56,7 +56,7 @@ fn read_private_key(path: &Path) -> Box<dyn PrivateKey> {
     match sec_key {
         Ok(k) => k,
         Err(ParseError::MissingPassword) => {
-            let pwd = prompt_user("Please enter a password for the key");
+            let pwd = util::prompt_user("Please enter a password for the key");
             parse::deserialize::parse_private_key_json(&json, Some(pwd.as_str())).unwrap()
         }
         _ => sec_key.unwrap(),

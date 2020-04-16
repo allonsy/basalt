@@ -21,7 +21,7 @@ pub fn base32_decode(msg: &str) -> Option<Vec<u8>> {
     base32::decode(BASE32_ALPHABET, msg)
 }
 
-fn prompt_user(prompt: &str) -> String {
+pub fn prompt_user(prompt: &str) -> String {
     let mut input = String::new();
     print!("{}: ", prompt);
     std::io::stdout().flush().unwrap();
