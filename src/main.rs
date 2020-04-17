@@ -68,11 +68,11 @@ fn read_public_key(path: &Path) -> Box<dyn PublicKey> {
     parse::deserialize::parse_public_key_json(&json).unwrap()
 }
 
-fn read_json_file(path: &Path) -> Value {
+fn read_json_file(path: &Path) -> Vec<u8> {
     let mut file = File::open(path).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    serde_json::from_str(&contents).unwrap()
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents).unwrap();
+    contents
 }
 
 fn write_json(val: &[u8], filename: &Path) {

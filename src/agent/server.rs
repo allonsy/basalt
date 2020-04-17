@@ -186,19 +186,19 @@ fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {
         .join("keys")
         .join(format!("{}.priv", key_name));
     let private_key = fs::read_to_string(private_key_file_name).ok()?;
-    let private_key_json: serde_json::Value = serde_json::from_str(&private_key).ok()?;
-
-    let parsed_key = deserialize::parse_private_key_json(&private_key_json, None);
+    let parsed_key = deserialize::parse_private_key_json(&private_key.as_bytes(), None);
     match parsed_key {
         Ok(key) => Some(key),
-        Err(deserialize::ParseError::MissingPassword) => query_pin(key_name, &private_key_json, 3),
+        Err(deserialize::ParseError::MissingPassword) => {
+            query_pin(key_name, &private_key.as_bytes(), 3)
+        }
         _ => None,
     }
 }
 
 fn query_pin(
     key_name: &str,
-    json: &serde_json::Value,
+    json: &[u8],
     num_retries: usize,
 ) -> Option<Box<dyn keys::PrivateKey + Send>> {
     for _ in 0..num_retries {

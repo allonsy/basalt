@@ -1,12 +1,9 @@
-use crate::keys::KeySignature;
 use crate::keys::PrivateKey;
 use crate::keys::PublicKey;
 use crate::keys::SodiumPrivateKey;
 use crate::keys::SodiumPublicKey;
 use crate::util;
 use crate::util::base32_encode;
-use serde_json::json;
-use serde_json::Value;
 use sodiumoxide::crypto::pwhash;
 use sodiumoxide::crypto::pwhash::Salt;
 use sodiumoxide::crypto::secretbox;
