@@ -44,8 +44,8 @@ fn get_keys() -> (Box<dyn PublicKey>, Box<dyn PrivateKey>) {
         let pub_key_json = parse::serialize::serialize_sodium_pub_key(&pub_key);
         let sec_key_json =
             parse::serialize::serialize_sodium_private_key(&sec_key, password_opt).unwrap();
-        write_json(pub_key_json, &public_key_file);
-        write_json(sec_key_json, &private_key_file);
+        write_json(&pub_key_json, &public_key_file);
+        write_json(&sec_key_json, &private_key_file);
         return (Box::new(pub_key), Box::new(sec_key));
     }
 }
@@ -75,8 +75,7 @@ fn read_json_file(path: &Path) -> Value {
     serde_json::from_str(&contents).unwrap()
 }
 
-fn write_json(val: serde_json::Value, filename: &Path) {
-    let json_string = val.to_string();
+fn write_json(val: &[u8], filename: &Path) {
     let mut file = File::create(filename).unwrap();
-    file.write_all(json_string.as_bytes()).unwrap();
+    file.write_all(val).unwrap();
 }
