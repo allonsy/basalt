@@ -1,3 +1,4 @@
+pub mod generate;
 pub mod sodium;
 use crate::util;
 pub use sodium::SodiumPrivateKey;

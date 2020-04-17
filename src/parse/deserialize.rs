@@ -25,7 +25,7 @@ pub fn parse_private_key_json(
     pwd: Option<&str>,
 ) -> Result<Box<dyn PrivateKey + Send>, ParseError> {
     let json_str = std::str::from_utf8(json)
-        .map_err(|e| ParseError::JsonError("JSON isn't UTF8".to_string()))?;
+        .map_err(|_| ParseError::JsonError("JSON isn't UTF8".to_string()))?;
     let private_key_wrapper: super::PrivateKeyWrapperFormat =
         serde_json::from_str(json_str).map_err(|e| ParseError::JsonError(format!("{}", e)))?;
     let device_id = private_key_wrapper.device_id.clone();

@@ -132,3 +132,15 @@ pub fn get_pin(key_name: &str) -> Result<String, String> {
     let _ = pinentry.send_command("BYE");
     resp
 }
+
+pub fn generate_pin(key_name: &str) -> Result<String, String> {
+    let mut pinentry = PinEntry::new()?;
+    let resp = pinentry.send_command(&format!("SETDESC Please enter PIN for {}", key_name))?;
+    let _ = PinEntryResponse::parse_response(&resp).unwrap()?;
+    let resp = pinentry.send_command("SETREPEAT Repeat")?;
+    let _ = PinEntryResponse::parse_response(&resp).unwrap()?;
+    let pin = pinentry.send_command("GETPIN")?;
+    let resp = PinEntryResponse::parse_response(&pin).unwrap();
+    let _ = pinentry.send_command("BYE");
+    resp
+}

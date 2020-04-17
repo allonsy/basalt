@@ -29,7 +29,7 @@ pub fn prompt_user(prompt: &str) -> String {
     input.trim().to_string()
 }
 
-fn user_menu(prompt: &str, options: &[&str], default: Option<usize>) -> usize {
+pub fn user_menu(prompt: &str, options: &[&str], default: Option<usize>) -> usize {
     println!("{}", prompt);
     for (pos, item) in options.iter().enumerate() {
         let is_default = default.is_some() && *default.as_ref().unwrap() == pos;
