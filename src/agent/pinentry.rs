@@ -82,13 +82,17 @@ impl PinEntry {
             ));
         }
 
-        self.read_line()
+        let mut res = self.read_line()?;
+        while res.starts_with("S") {
+            res = self.read_line()?;
+        }
+        Ok(res)
     }
 }
 
 impl Drop for PinEntry {
     fn drop(&mut self) {
-        self.pin_process.wait();
+        let _ = self.pin_process.wait();
     }
 }
 
@@ -100,11 +104,15 @@ enum PinEntryResponse {
 impl PinEntryResponse {
     fn parse_response(msg: &str) -> PinEntryResponse {
         let msg_split: Vec<&str> = msg.splitn(2, " ").collect();
-        if msg_split.len() != 2 {
-            return PinEntryResponse::Error(format!(
-                "Unable to parse pinentry response: '{}'",
-                msg
-            ));
+        if msg_split.len() == 1 {
+            if msg_split[0] == "OK" {
+                return PinEntryResponse::Success(String::new());
+            } else {
+                return PinEntryResponse::Error(format!(
+                    "Pinetry Error Response: {}",
+                    msg_split[0]
+                ));
+            }
         }
         let prefix = msg_split[0];
         let suffix = msg_split[1];
@@ -135,6 +143,8 @@ pub fn get_pin(key_name: &str) -> Result<String, String> {
 
 pub fn generate_pin(key_name: &str) -> Result<String, String> {
     let mut pinentry = PinEntry::new()?;
+    let start = pinentry.read_line()?;
+    let _ = PinEntryResponse::parse_response(&start).unwrap()?;
     let resp = pinentry.send_command(&format!("SETDESC Please enter PIN for {}", key_name))?;
     let _ = PinEntryResponse::parse_response(&resp).unwrap()?;
     let resp = pinentry.send_command("SETREPEAT Repeat")?;

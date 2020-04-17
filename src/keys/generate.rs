@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
-fn generate_key() {
+pub fn generate_key() {
     let device_id = prompt_user("Please enter a device name");
     let key_type_choices = vec!["sodium"];
     let key_type_choice = user_menu("Please choose a key type", &key_type_choices, Some(0));
@@ -21,7 +21,8 @@ fn generate_key() {
 fn generate_sodium_key(device_id: &str) {
     let pin = pinentry::generate_pin(device_id);
     if pin.is_err() {
-        println!("Invalid PIN, discarding key");
+        println!("Invalid PIN: {}", pin.err().unwrap());
+        println!("Aborting...");
         return;
     }
     let pin = pin.unwrap();
