@@ -46,7 +46,7 @@ fn generate_sodium_key(device_id: &str) {
     }
     let pub_key_bytes = serialize::serialize_sodium_pub_key(&pub_key);
 
-    let base_dir = config::get_app_dir().join("keys");
+    let base_dir = config::get_keys_dir();
     let sec_key_file = base_dir.join(format!("{}.sec", device_id));
     let pub_key_file = base_dir.join(format!("{}.pub", device_id));
     write_key(&sec_key_file, &sec_key_bytes.unwrap());

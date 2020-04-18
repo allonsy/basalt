@@ -11,6 +11,13 @@ pub fn get_app_dir() -> PathBuf {
     app_dir
 }
 
+pub fn get_keys_dir() -> PathBuf {
+    let app_dir = get_app_dir();
+    let keys_dir = app_dir.join("keys");
+    init(&keys_dir);
+    keys_dir
+}
+
 fn init(app_dir: &Path) {
     if app_dir.is_dir() {
         return;

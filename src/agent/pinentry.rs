@@ -133,6 +133,8 @@ impl PinEntryResponse {
 
 pub fn get_pin(key_name: &str) -> Result<String, String> {
     let mut pinentry = PinEntry::new()?;
+    let start = pinentry.read_line()?;
+    let _ = PinEntryResponse::parse_response(&start).unwrap()?;
     let resp = pinentry.send_command(&format!("SETDESC Please enter PIN for {}", key_name))?;
     let _ = PinEntryResponse::parse_response(&resp).unwrap()?;
     let pin = pinentry.send_command("GETPIN")?;

@@ -182,9 +182,7 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
 }
 
 fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {
-    let private_key_file_name = config::get_app_dir()
-        .join("keys")
-        .join(format!("{}.priv", key_name));
+    let private_key_file_name = config::get_keys_dir().join(format!("{}.sec", key_name));
     let private_key = fs::read_to_string(private_key_file_name).ok()?;
     let parsed_key = deserialize::parse_private_key_json(&private_key.as_bytes(), None);
     match parsed_key {
