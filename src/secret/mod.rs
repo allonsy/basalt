@@ -1,10 +1,21 @@
 mod decrypt;
 mod encrypt;
 
+use serde::Deserialize;
+use serde::Serialize;
+use sodiumoxide::crypto::secretbox::Nonce;
+
 pub use encrypt::encrypt;
 
-const DEVICE_ID_KEY: &'static str = "device_id";
-const KEY_KEY: &'static str = "key";
-const NONCE_KEY: &'static str = "nonce";
-const ENCRYPTED_PAYLOAD_KEY: &'static str = "payload";
-const RECIPIENTS_KEY: &'static str = "recipients";
+#[derive(Serialize, Deserialize)]
+pub struct SecretStore {
+    nonce: Nonce,
+    encrypted_payload: Vec<u8>,
+    recipients: Vec<Recipient>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Recipient {
+    device_id: String,
+    encrypted_box: Vec<u8>,
+}

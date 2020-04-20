@@ -18,6 +18,27 @@ pub fn get_keys_dir() -> PathBuf {
     keys_dir
 }
 
+pub fn get_store_dir() -> PathBuf {
+    let app_dir = get_app_dir();
+    let store_dir = app_dir.join("store");
+    init(&store_dir);
+    store_dir
+}
+
+pub fn get_password_dir() -> PathBuf {
+    let store_dir = get_store_dir();
+    let pass_dir = store_dir.join("passwords");
+    init(&pass_dir);
+    pass_dir
+}
+
+pub fn get_pubkey_dir() -> PathBuf {
+    let store_dir = get_pubkey_dir();
+    let pubkey_dir = store_dir.join(".keys");
+    init(&pubkey_dir);
+    pubkey_dir
+}
+
 fn init(app_dir: &Path) {
     if app_dir.is_dir() {
         return;

@@ -1,4 +1,5 @@
 pub mod generate;
+pub mod public;
 pub mod sodium;
 use crate::util;
 pub use sodium::SodiumPrivateKey;
@@ -23,8 +24,8 @@ impl KeySignature {
 
     pub fn verify_signature(
         &self,
-        public_key: Box<dyn PublicKey>,
-        signing_key: Box<dyn PublicKey>,
+        public_key: &dyn PublicKey,
+        signing_key: &dyn PublicKey,
     ) -> bool {
         if public_key.get_device_id() != self.public_key_id {
             return false;
