@@ -4,6 +4,8 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+pub const DEVICE_ID_FILE_NAME: &'static str = ".device_ids";
+
 pub fn get_app_dir() -> PathBuf {
     let home_dir = dirs::home_dir().unwrap();
     let app_dir = home_dir.join(format!(".{}", constants::APP_NAME));
