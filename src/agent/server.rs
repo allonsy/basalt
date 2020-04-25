@@ -181,14 +181,14 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
     protocol::Response::Success(encoded_signed_message)
 }
 
-fn load_key(key_name: &str) -> Option<Box<dyn keys::PrivateKey + Send>> {
-    let private_key_file_name = config::get_keys_dir().join(format!("{}.sec", key_name));
-    let private_key = fs::read_to_string(private_key_file_name).ok()?;
+fn load_device_key() -> Option<Box<dyn keys::PrivateKey + Send>> {
+    let device_key_path = config::get_private_device_key_path();
+    let private_key = fs::read_to_string(device_key_path).ok()?;
     let parsed_key = deserialize::parse_private_key_json(&private_key.as_bytes(), None);
     match parsed_key {
         Ok(key) => Some(key),
         Err(deserialize::ParseError::MissingPassword) => {
-            query_pin(key_name, &private_key.as_bytes(), 3)
+            query_pin("device key", &private_key.as_bytes(), 3)
         }
         _ => None,
     }

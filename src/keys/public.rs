@@ -1,170 +1,209 @@
-use super::PublicKey;
-use crate::config;
-use crate::parse::deserialize;
-use glob::glob;
+use crate::util::concat;
+use serde::Deserialize;
+use serde::Serialize;
+use sodiumoxide::crypto::box_;
+use sodiumoxide::crypto::hash;
+use sodiumoxide::crypto::sign;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Read;
-use std::path::Path;
 
-pub fn load_keys_for_file(path: &Path) -> Result<Vec<Box<dyn PublicKey>>, String> {
-    let device_ids = get_device_ids(path)?;
-    let mut keys = load_public_keys();
+const KEY_CHAIN_VERSION: u64 = 1;
 
-    let mut pub_keys = Vec::new();
-    for device_id in device_ids {
-        let key = keys.remove(&device_id);
-        if key.is_none() {
-            eprintln!("WARNING: Unable to find key for device id: {}", device_id);
-        } else {
-            pub_keys.push(key.unwrap());
-        }
-    }
-    Ok(pub_keys)
+#[derive(Serialize, Deserialize)]
+pub struct KeyChain {
+    version: u64,
+    chain: Vec<ChainLink>,
 }
 
-pub fn load_public_keys() -> HashMap<String, Box<dyn PublicKey>> {
-    let mut trusted_keys = get_device_keys();
-    let mut untrusted_keys = HashMap::new();
-
-    let pubkey_dir = config::get_pubkey_dir();
-    let pattern = pubkey_dir.join("*.pub");
-    let matches = glob(pattern.to_str().unwrap());
-    if matches.is_err() {
-        eprintln!("Unable to parse glob: {}", matches.err().unwrap());
-        return trusted_keys;
-    }
-    let matches = matches.unwrap();
-    for keyfile in matches {
-        if keyfile.is_err() {
-            eprintln!("Unable to find file: {}", keyfile.err().unwrap());
-            continue;
-        }
-        let keyfile = keyfile.unwrap();
-        let pubkey = read_public_key(&keyfile);
-        if pubkey.is_err() {
-            eprintln!("{}", pubkey.err().unwrap());
-            continue;
-        }
-        let pubkey = pubkey.unwrap();
-        if trusted_keys.contains_key(pubkey.get_device_id()) {
-            continue;
-        }
-        untrusted_keys.insert(pubkey.get_device_id().to_string(), pubkey);
-    }
-
-    loop {
-        let changed = get_new_trusted_keys(&mut trusted_keys, &mut untrusted_keys);
-        if untrusted_keys.is_empty() {
-            break;
-        }
-        if !changed {
-            break;
+impl KeyChain {
+    fn new() -> KeyChain {
+        KeyChain {
+            version: KEY_CHAIN_VERSION,
+            chain: Vec::new(),
         }
     }
 
-    trusted_keys
-}
+    fn verify(&self, head: &[u8]) -> bool {
+        let mut trusted_keys: HashMap<String, PublicKey> = HashMap::new();
+        let mut is_trusted = false;
+        let mut is_genesis = true;
+        let mut parent_digest: Option<Vec<u8>> = None;
 
-fn get_new_trusted_keys(
-    trusted_keys: &mut HashMap<String, Box<dyn PublicKey>>,
-    untrusted_keys: &mut HashMap<String, Box<dyn PublicKey>>,
-) -> bool {
-    let mut changed = false;
-    let mut new_trusted = Vec::new();
+        for link in self.chain {
+            if !is_genesis {
+                if parent_digest.is_none() {
+                    return false;
+                }
+                if &link.parent != parent_digest.as_ref().unwrap() {
+                    return false;
+                }
+            } else {
+                is_genesis = false;
+            }
 
-    for (device_id, key) in untrusted_keys.iter() {
-        for sig in key.get_signatures() {
-            if trusted_keys.contains_key(&sig.signing_key_id) {
-                let signing_key = trusted_keys.get(&sig.signing_key_id).unwrap();
-                if sig.verify_signature(key.as_ref(), signing_key.as_ref()) {
-                    new_trusted.push(device_id.clone())
+            match link.event {
+                KeyEvent::NewKey(wrap) => {
+                    let signing_key = trusted_keys.get(&link.signature.signing_key_id);
+                    if signing_key.is_none() {
+                        return false;
+                    }
+                    let sig_expected_payload =
+                        get_hash(&concat(&link.parent, &link.event.get_digest()));
+                    if signing_key
+                        .unwrap()
+                        .verify(&link.signature.payload, &sig_expected_payload)
+                        == false
+                    {
+                        return false;
+                    }
+                    trusted_keys.insert(wrap.device_id, wrap.key);
+                }
+                KeyEvent::KeyRevoke(wrap) => {
+                    let signing_key = trusted_keys.get(&link.signature.signing_key_id);
+                    if signing_key.is_none() {
+                        return false;
+                    }
+                    let sig_expected_payload =
+                        get_hash(&concat(&link.parent, &link.event.get_digest()));
+                    if signing_key
+                        .unwrap()
+                        .verify(&link.signature.payload, &sig_expected_payload)
+                        == false
+                    {
+                        return false;
+                    }
+                    trusted_keys.remove(&wrap.device_id);
+                }
+                KeyEvent::KeySignRequest(wrap) => {
+                    let sig_expected_payload =
+                        get_hash(&concat(&link.parent, &link.event.get_digest()));
+                    if wrap
+                        .key
+                        .verify(&link.signature.payload, &sig_expected_payload)
+                        == false
+                    {
+                        return false;
+                    }
+                    trusted_keys.insert(wrap.device_id, wrap.key);
                 }
             }
+            let link_digest = link.get_digest();
+            if link_digest == head {
+                is_trusted = true;
+            }
         }
-    }
 
-    for device_id in new_trusted {
-        let pub_key = untrusted_keys.remove(&device_id).unwrap();
-        sign_key(pub_key.as_ref());
-        trusted_keys.insert(device_id.to_string(), pub_key);
-        changed = true;
+        is_trusted
     }
-    changed
 }
 
-fn get_device_ids(path: &Path) -> Result<Vec<String>, String> {
-    let top_dir = config::get_store_dir();
-    let mut device_id_file = top_dir.join(config::DEVICE_ID_FILE_NAME);
-    loop {
-        let this_file = path.parent().ok_or("No parent found for device file")?;
-        let this_file = this_file.join(config::DEVICE_ID_FILE_NAME);
-        if this_file.is_file() {
-            device_id_file = this_file;
-            break;
-        }
-        if this_file == device_id_file {
-            break;
-        }
-    }
-
-    let id_file =
-        File::open(device_id_file).map_err(|e| format!("Unable to open device id file: {}", e))?;
-    let mut bufreader = BufReader::new(id_file);
-
-    let mut device_ids = Vec::new();
-    let mut id_line = String::new();
-    while bufreader
-        .read_line(&mut id_line)
-        .map_err(|e| format!("Unable to read line from file: {}", e))?
-        != 0
-    {
-        device_ids.push(id_line.trim().to_string());
-    }
-
-    Ok(device_ids)
+#[derive(Serialize, Deserialize)]
+struct ChainLink {
+    parent: Vec<u8>,
+    event: KeyEvent,
+    signature: KeyEventSignature,
 }
 
-fn sign_key(pub_key: &dyn PublicKey) {}
-
-fn get_device_keys() -> HashMap<String, Box<dyn PublicKey>> {
-    let keys_dir = config::get_keys_dir();
-    let pattern = keys_dir.join("*.pub");
-
-    let mut keys = HashMap::new();
-
-    let matches = glob(pattern.to_str().unwrap());
-    if matches.is_err() {
-        eprintln!("Unable to parse glob: {}", matches.err().unwrap());
-        return keys;
+impl ChainLink {
+    fn get_digest(&self) -> Vec<u8> {
+        get_hash(&concat(
+            &concat(&self.parent, &self.event.get_digest()),
+            &self.signature.get_digest(),
+        ))
     }
-    let matches = matches.unwrap();
-    for keyfile in matches {
-        if keyfile.is_err() {
-            eprintln!("Unable to find keyfile: {}", keyfile.err().unwrap());
-        } else {
-            let keyfile = keyfile.unwrap();
-            let pubkey = read_public_key(&keyfile);
-            if pubkey.is_err() {
-                eprintln!("{}", pubkey.err().unwrap());
-            } else {
-                let pubkey = pubkey.unwrap();
-                keys.insert(pubkey.get_device_id().to_string(), pubkey);
+}
+
+#[derive(Serialize, Deserialize)]
+enum KeyEvent {
+    NewKey(PublicKeyWrapper),
+    KeySignRequest(PublicKeyWrapper),
+    KeyRevoke(PublicKeyWrapper),
+}
+
+impl KeyEvent {
+    fn get_digest(&self) -> Vec<u8> {
+        match self {
+            KeyEvent::NewKey(wrap) => get_hash(&concat("new".as_bytes(), &wrap.get_digest())),
+            KeyEvent::KeySignRequest(wrap) => {
+                get_hash(&concat("sign".as_bytes(), &wrap.get_digest()))
+            }
+            KeyEvent::KeyRevoke(wrap) => get_hash(&concat("revoke".as_bytes(), &wrap.get_digest())),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+struct KeyEventSignature {
+    signing_key_id: String,
+    payload: Vec<u8>,
+}
+
+impl KeyEventSignature {
+    fn get_digest(&self) -> Vec<u8> {
+        get_hash(&concat(self.signing_key_id.as_bytes(), &self.payload))
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PublicKeyWrapper {
+    device_id: String,
+    key: PublicKey,
+}
+
+impl PublicKeyWrapper {
+    fn get_digest(&self) -> Vec<u8> {
+        get_hash(&concat(self.device_id.as_bytes(), &self.key.get_digest()))
+    }
+
+    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+        self.key.verify(payload, expected)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub enum PublicKey {
+    Sodium(SodiumKey),
+}
+
+impl PublicKey {
+    fn get_digest(&self) -> Vec<u8> {
+        match self {
+            PublicKey::Sodium(skey) => {
+                let bytes = concat("sodium".as_bytes(), &skey.get_digest());
+                get_hash(&bytes)
             }
         }
     }
-    keys
+
+    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+        match self {
+            PublicKey::Sodium(skey) => skey.verify(payload, expected),
+        }
+    }
 }
 
-fn read_public_key(path: &Path) -> Result<Box<dyn PublicKey>, String> {
-    let mut keyfile = File::open(path).map_err(|e| format!("Unable to open file: {}", e))?;
-    let mut file_bytes = Vec::new();
+#[derive(Serialize, Deserialize)]
+pub struct SodiumKey {
+    enc_key: box_::PublicKey,
+    sign_key: sign::PublicKey,
+}
 
-    keyfile
-        .read_to_end(&mut file_bytes)
-        .map_err(|e| format!("Unable to read file: {}", e))?;
-    deserialize::parse_public_key_json(&file_bytes)
-        .map_err(|e| format!("Unable to parse public key"))
+impl SodiumKey {
+    fn get_digest(&self) -> Vec<u8> {
+        let pkey_bytes = concat(&self.enc_key.0, &self.sign_key.0);
+        get_hash(&pkey_bytes)
+    }
+
+    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+        let sign_result = sign::verify(payload, &self.sign_key);
+        if sign_result.is_err() {
+            return false;
+        }
+        sign_result.unwrap() == expected
+    }
+}
+
+fn get_hash(payload: &[u8]) -> Vec<u8> {
+    let mut hash_bytes = Vec::new();
+    hash_bytes.extend_from_slice(&hash::hash(payload).0);
+    hash_bytes
 }
