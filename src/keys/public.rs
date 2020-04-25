@@ -23,7 +23,7 @@ impl KeyChain {
     }
 
     fn verify(&self, head: &[u8]) -> bool {
-        let mut trusted_keys: HashMap<String, PublicKey> = HashMap::new();
+        let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
         let mut is_genesis = true;
         let mut parent_digest: Option<Vec<u8>> = None;
@@ -55,7 +55,7 @@ impl KeyChain {
                     {
                         return false;
                     }
-                    trusted_keys.insert(wrap.device_id, wrap.key);
+                    trusted_keys.insert(wrap.device_id, &wrap.key);
                 }
                 KeyEvent::KeyRevoke(wrap) => {
                     let signing_key = trusted_keys.get(&link.signature.signing_key_id);
@@ -83,7 +83,6 @@ impl KeyChain {
                     {
                         return false;
                     }
-                    trusted_keys.insert(wrap.device_id, wrap.key);
                 }
             }
             let link_digest = link.get_digest();
