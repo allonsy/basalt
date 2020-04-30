@@ -20,16 +20,6 @@ pub fn get_keys_dir() -> PathBuf {
     keys_dir
 }
 
-pub fn get_private_device_key_path() -> PathBuf {
-    let keys_dir = get_keys_dir();
-    keys_dir.join("private.json")
-}
-
-pub fn get_public_device_key_path() -> PathBuf {
-    let keys_dir = get_keys_dir();
-    keys_dir.join("public.json")
-}
-
 pub fn get_store_dir() -> PathBuf {
     let app_dir = get_app_dir();
     let store_dir = app_dir.join("store");
@@ -49,6 +39,11 @@ pub fn get_pubkey_dir() -> PathBuf {
     let pubkey_dir = store_dir.join(".keys");
     init(&pubkey_dir);
     pubkey_dir
+}
+
+pub fn get_chain_head_file() -> PathBuf {
+    let keys_dir = get_keys_dir();
+    keys_dir.join("chain.head")
 }
 
 fn init(app_dir: &Path) {

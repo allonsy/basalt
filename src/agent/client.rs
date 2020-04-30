@@ -28,3 +28,7 @@ fn send_requests(requests: &Vec<Request>) -> Result<Vec<Response>, String> {
     let response = read_message(&mut reader)?;
     deserialize_response(&response)
 }
+
+pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
+    Err("unimplemented".to_string())
+}

@@ -1,4 +1,5 @@
 pub mod generate;
+pub mod private;
 pub mod public;
 pub mod sodium;
 use crate::util;
