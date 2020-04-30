@@ -5,7 +5,7 @@ pub enum Request {
     Hello,
     Clear,
     Quit,
-    Decrypt(DecryptRequest),
+    Decrypt(Vec<DecryptRequest>),
     Sign(SignRequest),
 }
 

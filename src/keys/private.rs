@@ -16,6 +16,7 @@ use serde::Serialize;
 use sodiumoxide::crypto::box_;
 use sodiumoxide::crypto::pwhash;
 use sodiumoxide::crypto::pwhash::Salt;
+use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::secretbox;
 use sodiumoxide::crypto::secretbox::Nonce;
 use sodiumoxide::crypto::sign;
@@ -31,6 +32,28 @@ pub struct PrivateKeyWrapper {
 #[derive(Serialize, Deserialize)]
 pub enum PrivateKey {
     Sodium(SodiumPrivateKey),
+}
+
+impl PrivateKey {
+    pub fn sign(&self, message: &[u8]) -> Result<Vec<u8>, String> {
+        match self {
+            PrivateKey::Sodium(SodiumPrivateKey::Unencrypted(skey)) => {
+                Ok(sign::sign_detached(message, &skey.sign_key).0.to_vec())
+            }
+            _ => Err("private key doesn't support sign operations".to_string()),
+        }
+    }
+
+    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, String> {
+        match self {
+            PrivateKey::Sodium(SodiumPrivateKey::Unencrypted(skey)) => {
+                let pub_key = skey.encrypt_key.public_key();
+                let plaintext = sealedbox::open(ciphertext, &pub_key, &skey.encrypt_key);
+                plaintext.map_err(|e| "decrypt operation failure".to_string())
+            }
+            _ => Err("private key doesn't support decrypt operations".to_string()),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

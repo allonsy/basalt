@@ -1,24 +1,21 @@
 use super::pinentry;
 use super::protocol;
 use super::protocol::deserialize_request;
-use super::protocol::deserialize_response;
-use super::protocol::serialize_request;
 use super::protocol::serialize_response;
 use super::read_message;
 use super::send_message;
 use crate::config;
 use crate::keys;
+use crate::keys::private::PrivateKey;
 use crate::parse::deserialize;
 use crate::util;
 use nix::unistd;
-use serde_json;
 use std::collections::HashMap;
 use std::fs;
-use std::io::BufRead;
 use std::io::BufReader;
+use std::ops::DerefMut;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -26,7 +23,7 @@ use std::thread;
 type SharedState = Arc<Mutex<ServerState>>;
 
 struct ServerState {
-    keys: HashMap<String, Box<dyn keys::PrivateKey + Send>>,
+    keys: HashMap<String, PrivateKey>,
 }
 
 pub fn start_server() -> Result<(), String> {
@@ -124,7 +121,10 @@ fn handle_request(st: SharedState, requests: Vec<protocol::Request>) -> Vec<prot
     responses
 }
 
-fn decrypt_packet(st: SharedState, decrypt: protocol::DecryptRequest) -> protocol::Response {
+fn decrypt_packet(
+    st: SharedState,
+    decrypt_packets: Vec<protocol::DecryptRequest>,
+) -> protocol::Response {
     let locked_state = st.lock();
     if locked_state.is_err() {
         return protocol::Response::Failure(format!(
@@ -133,26 +133,29 @@ fn decrypt_packet(st: SharedState, decrypt: protocol::DecryptRequest) -> protoco
         ));
     }
     let locked_state = locked_state.unwrap();
-    let key = locked_state.keys.get(&decrypt.private_key_id);
-    if key.is_none() {
-        return protocol::Response::Failure(format!(
-            "Unable to find key: {}",
-            decrypt.private_key_id
-        ));
+
+    for dec_req in decrypt_packets {
+        load_key(&dec_req.private_key_id, locked_state.deref_mut());
+        let key = locked_state.keys.get(&dec_req.private_key_id);
+        if key.is_none() {
+            continue;
+        }
+        let key = key.unwrap();
+        let ciphertext = util::base32_decode(&dec_req.payload);
+        if ciphertext.is_none() {
+            continue;
+        }
+        let ciphertext = ciphertext.unwrap();
+        let plaintext = key.decrypt(&ciphertext);
+        if plaintext.is_err() {
+            continue;
+        }
+        let plaintext = plaintext.unwrap();
+        let encoded_plaintext = util::base32_encode(&plaintext);
+        return protocol::Response::Success(encoded_plaintext);
     }
-    let key = key.unwrap();
-    let ciphertext = util::base32_decode(&decrypt.payload);
-    if ciphertext.is_none() {
-        return protocol::Response::Failure("Unable to parse base32 encoded payload".to_string());
-    }
-    let ciphertext = ciphertext.unwrap();
-    let plaintext = key.decrypt(&ciphertext);
-    if plaintext.is_err() {
-        return protocol::Response::Failure("Unable to decrypt packet".to_string());
-    }
-    let plaintext = plaintext.unwrap();
-    let encoded_plaintext = util::base32_encode(&plaintext);
-    protocol::Response::Success(encoded_plaintext)
+
+    protocol::Response::Failure("Unable to find suitable key for decryption".to_string())
 }
 
 fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Response {
@@ -164,6 +167,7 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
         ));
     }
     let locked_state = locked_state.unwrap();
+    load_key(&sign.private_key_id, locked_state.deref_mut());
     let key = locked_state.keys.get(&sign.private_key_id);
     if key.is_none() {
         return protocol::Response::Failure(format!("Unable to find key: {}", sign.private_key_id));
@@ -177,22 +181,15 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
     }
     let message = message.unwrap();
     let signed_message = key.sign(&message);
+    if signed_message.is_err() {
+        return protocol::Response::Failure(signed_message.err().unwrap());
+    }
+    let signed_message = signed_message.unwrap();
     let encoded_signed_message = util::base32_encode(&signed_message);
     protocol::Response::Success(encoded_signed_message)
 }
 
-fn load_device_key() -> Option<Box<dyn keys::PrivateKey + Send>> {
-    let device_key_path = config::get_private_device_key_path();
-    let private_key = fs::read_to_string(device_key_path).ok()?;
-    let parsed_key = deserialize::parse_private_key_json(&private_key.as_bytes(), None);
-    match parsed_key {
-        Ok(key) => Some(key),
-        Err(deserialize::ParseError::MissingPassword) => {
-            query_pin("device key", &private_key.as_bytes(), 3)
-        }
-        _ => None,
-    }
-}
+fn load_key(key_id: &str, st: &mut ServerState) {}
 
 fn query_pin(
     key_name: &str,
