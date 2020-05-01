@@ -50,8 +50,9 @@ impl KeyChain {
         let mut is_trusted = false;
         let mut is_genesis = true;
         let mut parent_digest: Option<Vec<u8>> = None;
+        let chain_length = self.chain.len();
 
-        for link in self.chain {
+        for (index, link) in self.chain.iter().enumerate() {
             if !is_genesis {
                 if parent_digest.is_none() {
                     return None;
@@ -104,6 +105,9 @@ impl KeyChain {
                         .verify(&link.signature.payload, &sig_expected_payload)
                         == false
                     {
+                        return None;
+                    }
+                    if index != chain_length - 1 {
                         return None;
                     }
                 }
