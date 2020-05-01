@@ -1,6 +1,6 @@
 pub mod client;
 pub mod pinentry;
-mod protocol;
+pub mod protocol;
 mod server;
 use std::io::BufRead;
 use std::io::BufReader;

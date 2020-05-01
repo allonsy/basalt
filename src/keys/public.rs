@@ -21,6 +21,13 @@ impl KeyChain {
         KeyChain { chain: Vec::new() }
     }
 
+    pub fn get_keychain() -> Result<KeyChain, String> {
+        let chain_file = config::get_chain_file();
+        let chain_contents = fs::read_to_string(chain_file)
+            .map_err(|e| format!("Unable to read chain file: {}", e))?;
+        serde_json::from_str(&chain_contents).map_err(|e| format!("Unable to parse keychain json"))
+    }
+
     pub fn is_valid_device_id(&self, device_id: &str) -> bool {
         let mut valid_names = HashSet::new();
         for link in self.chain {
@@ -50,6 +57,7 @@ impl KeyChain {
         let mut is_trusted = false;
         let mut is_genesis = true;
         let mut parent_digest: Option<Vec<u8>> = None;
+        let mut new_head = Vec::new();
         let chain_length = self.chain.len();
 
         for (index, link) in self.chain.iter().enumerate() {
@@ -63,6 +71,7 @@ impl KeyChain {
             } else {
                 is_genesis = false;
             }
+            let link_digest = link.get_digest();
 
             match link.event {
                 KeyEvent::NewKey(wrap) => {
@@ -80,6 +89,7 @@ impl KeyChain {
                         return None;
                     }
                     trusted_keys.insert(wrap.device_id, &wrap.key);
+                    new_head = link_digest.clone();
                 }
                 KeyEvent::KeyRevoke(wrap) => {
                     let signing_key = trusted_keys.get(&link.signature.signing_key_id);
@@ -96,6 +106,7 @@ impl KeyChain {
                         return None;
                     }
                     trusted_keys.remove(&wrap.device_id);
+                    new_head = link_digest.clone();
                 }
                 KeyEvent::KeySignRequest(wrap) => {
                     let sig_expected_payload =
@@ -112,7 +123,6 @@ impl KeyChain {
                     }
                 }
             }
-            let link_digest = link.get_digest();
             if head.is_some() && &link_digest == head.as_ref().unwrap() {
                 is_trusted = true;
             }
@@ -121,6 +131,9 @@ impl KeyChain {
         if head.is_some() && !is_trusted {
             return None;
         } else {
+            if new_head != head.unwrap() {
+                write_head(&new_head);
+            }
             return Some(trusted_keys);
         }
     }

@@ -1,5 +1,7 @@
 use super::protocol::deserialize_response;
 use super::protocol::serialize_request;
+use super::protocol::Decrypt;
+use super::protocol::DecryptRequest;
 use super::protocol::Request;
 use super::protocol::Response;
 use super::protocol::SignRequest;
@@ -49,6 +51,22 @@ pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
             let decoded = util::base32_decode(&sign_str);
             if decoded.is_none() {
                 Err("Unable to parse signature response".to_string())
+            } else {
+                Ok(decoded.unwrap())
+            }
+        }
+        Response::Failure(err_msg) => Err(err_msg),
+    }
+}
+
+pub fn decrypt(recipients: Vec<DecryptRequest>) -> Result<Vec<u8>, String> {
+    let req = Request::Decrypt(recipients);
+    let resp = send_requests(vec![req])?;
+    match resp {
+        Response::Success(dec_str) => {
+            let decoded = util::base32_decode(&dec_str);
+            if decoded.is_none() {
+                Err("Unable to parse decrypt response".to_string())
             } else {
                 Ok(decoded.unwrap())
             }

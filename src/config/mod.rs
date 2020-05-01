@@ -41,6 +41,11 @@ pub fn get_pubkey_dir() -> PathBuf {
     pubkey_dir
 }
 
+pub fn get_chain_file() -> PathBuf {
+    let pubkey_dir = get_pubkey_dir();
+    pubkey_dir.join("key.chain")
+}
+
 pub fn get_chain_head_file() -> PathBuf {
     let keys_dir = get_keys_dir();
     keys_dir.join("chain.head")
