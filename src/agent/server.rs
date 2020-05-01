@@ -5,9 +5,8 @@ use super::protocol::serialize_response;
 use super::read_message;
 use super::send_message;
 use crate::config;
-use crate::keys;
+use crate::keys::private;
 use crate::keys::private::PrivateKey;
-use crate::parse::deserialize;
 use crate::util;
 use nix::unistd;
 use std::collections::HashMap;
@@ -19,6 +18,8 @@ use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
+
+const NUM_RETRIES: usize = 3;
 
 type SharedState = Arc<Mutex<ServerState>>;
 
@@ -189,24 +190,42 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
     protocol::Response::Success(encoded_signed_message)
 }
 
-fn load_key(key_id: &str, st: &mut ServerState) {}
+fn load_key(key_id: &str, st: &mut ServerState) {
+    if st.keys.contains_key(key_id) {
+        return;
+    }
 
-fn query_pin(
-    key_name: &str,
-    json: &[u8],
-    num_retries: usize,
-) -> Option<Box<dyn keys::PrivateKey + Send>> {
-    for _ in 0..num_retries {
-        let pin = pinentry::get_pin(key_name).ok()?;
-        match deserialize::parse_private_key_json(&json, Some(&pin)) {
-            Ok(key) => {
-                return Some(key);
-            }
-            Err(deserialize::ParseError::DecryptError) => {}
-            _ => {
-                return None;
+    let key_file = config::get_keys_dir().join(format!("{}.sec", key_id));
+    let key_bytes = fs::read_to_string(key_file);
+    if key_bytes.is_err() {
+        return;
+    }
+    let key_bytes = key_bytes.unwrap();
+    let sec_key = serde_json::from_str::<private::PrivateKeyWrapper>(&key_bytes);
+    if sec_key.is_err() {
+        return;
+    }
+    let sec_key = sec_key.unwrap();
+    match sec_key.key {
+        private::PrivateKey::Sodium(private::SodiumPrivateKey::Unencrypted(_)) => {
+            st.keys.insert(key_id.to_string(), sec_key.key);
+        }
+        private::PrivateKey::Sodium(private::SodiumPrivateKey::Encrypted(skey)) => {
+            for _ in 0..NUM_RETRIES {
+                let pin = pinentry::get_pin(key_id).ok();
+                if pin.is_none() {
+                    return;
+                }
+                let decrypted_key = skey.decrypt_key(&pin.unwrap());
+                if decrypted_key.is_some() {
+                    st.keys.insert(
+                        key_id.to_string(),
+                        private::PrivateKey::Sodium(private::SodiumPrivateKey::Unencrypted(
+                            decrypted_key.unwrap(),
+                        )),
+                    );
+                }
             }
         }
     }
-    None
 }

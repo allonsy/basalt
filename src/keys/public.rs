@@ -4,6 +4,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sodiumoxide::crypto::box_;
 use sodiumoxide::crypto::hash;
+use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::sign;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -17,7 +18,7 @@ pub struct KeyChain {
 }
 
 impl KeyChain {
-    fn new() -> KeyChain {
+    pub fn new() -> KeyChain {
         KeyChain { chain: Vec::new() }
     }
 
@@ -26,6 +27,14 @@ impl KeyChain {
         let chain_contents = fs::read_to_string(chain_file)
             .map_err(|e| format!("Unable to read chain file: {}", e))?;
         serde_json::from_str(&chain_contents).map_err(|e| format!("Unable to parse keychain json"))
+    }
+
+    pub fn write_keychain(&self) -> Result<(), String> {
+        let chain_file = config::get_chain_file();
+        let chain_bytes = serde_json::to_string(self)
+            .map_err(|e| format!("Unable to marshal keychain to json: {}", e))?;
+        fs::write(chain_file, chain_bytes.as_bytes())
+            .map_err(|e| format!("Unable to write keychain file: {}", e))
     }
 
     pub fn is_valid_device_id(&self, device_id: &str) -> bool {
@@ -141,13 +150,13 @@ impl KeyChain {
 
 #[derive(Serialize, Deserialize)]
 pub struct ChainLink {
-    parent: Vec<u8>,
-    event: KeyEvent,
-    signature: KeyEventSignature,
+    pub parent: Vec<u8>,
+    pub event: KeyEvent,
+    pub signature: KeyEventSignature,
 }
 
 impl ChainLink {
-    fn get_digest(&self) -> Vec<u8> {
+    pub fn get_digest(&self) -> Vec<u8> {
         get_hash(&concat(
             &concat(&self.parent, &self.event.get_digest()),
             &self.signature.get_digest(),
@@ -188,17 +197,21 @@ impl KeyEventSignature {
 
 #[derive(Serialize, Deserialize)]
 pub struct PublicKeyWrapper {
-    device_id: String,
-    key: PublicKey,
+    pub device_id: String,
+    pub key: PublicKey,
 }
 
 impl PublicKeyWrapper {
-    fn get_digest(&self) -> Vec<u8> {
+    pub fn get_digest(&self) -> Vec<u8> {
         get_hash(&concat(self.device_id.as_bytes(), &self.key.get_digest()))
     }
 
-    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+    pub fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
         self.key.verify(payload, expected)
+    }
+
+    pub fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
+        self.key.encrypt(payload)
     }
 }
 
@@ -217,9 +230,15 @@ impl PublicKey {
         }
     }
 
-    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+    pub fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
         match self {
             PublicKey::Sodium(skey) => skey.verify(payload, expected),
+        }
+    }
+
+    pub fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
+        match self {
+            PublicKey::Sodium(pkey) => pkey.encrypt(payload),
         }
     }
 }
@@ -242,6 +261,10 @@ impl SodiumKey {
             return false;
         }
         sign_result.unwrap() == expected
+    }
+
+    fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
+        sealedbox::seal(payload, &self.enc_key)
     }
 }
 

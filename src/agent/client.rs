@@ -1,6 +1,5 @@
 use super::protocol::deserialize_response;
 use super::protocol::serialize_request;
-use super::protocol::Decrypt;
 use super::protocol::DecryptRequest;
 use super::protocol::Request;
 use super::protocol::Response;
@@ -37,7 +36,7 @@ pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
     let payload = util::base32_encode(message);
     let req = SignRequest {
         private_key_id: sign_id.to_string(),
-        payload: payload,
+        payload,
     };
     let req = Request::Sign(req);
     let response = send_requests(&vec![req])?;
@@ -61,7 +60,11 @@ pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
 
 pub fn decrypt(recipients: Vec<DecryptRequest>) -> Result<Vec<u8>, String> {
     let req = Request::Decrypt(recipients);
-    let resp = send_requests(vec![req])?;
+    let resp = send_requests(&vec![req])?;
+    if resp.is_empty() {
+        return Err("No response from agent".to_string());
+    }
+    let resp = resp[0];
     match resp {
         Response::Success(dec_str) => {
             let decoded = util::base32_decode(&dec_str);

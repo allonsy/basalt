@@ -1,3 +1,4 @@
+use super::public;
 use super::public::get_head;
 use super::public::ChainLink;
 use super::public::KeyChain;
@@ -25,8 +26,8 @@ use std::fs;
 
 #[derive(Serialize, Deserialize)]
 pub struct PrivateKeyWrapper {
-    device_id: String,
-    key: PrivateKey,
+    pub device_id: String,
+    pub key: PrivateKey,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -49,7 +50,7 @@ impl PrivateKey {
             PrivateKey::Sodium(SodiumPrivateKey::Unencrypted(skey)) => {
                 let pub_key = skey.encrypt_key.public_key();
                 let plaintext = sealedbox::open(ciphertext, &pub_key, &skey.encrypt_key);
-                plaintext.map_err(|e| "decrypt operation failure".to_string())
+                plaintext.map_err(|_| "decrypt operation failure".to_string())
             }
             _ => Err("private key doesn't support decrypt operations".to_string()),
         }
@@ -73,20 +74,24 @@ struct EncryptedSodiumPrivateKey {
 }
 
 impl EncryptedSodiumPrivateKey {
-    fn new(pin: &str, e_key: box_::SecretKey, s_key: sign::SecretKey) -> EncryptedSodiumPrivateKey {
+    fn new(
+        pin: &str,
+        e_asym_key: box_::SecretKey,
+        s_asym_key: sign::SecretKey,
+    ) -> EncryptedSodiumPrivateKey {
         let e_salt = pwhash::gen_salt();
         let e_nonce = secretbox::gen_nonce();
         let mut e_key = [0; secretbox::KEYBYTES];
         pwhash::derive_key_interactive(&mut e_key, pin.as_bytes(), &e_salt);
         let e_key = secretbox::Key::from_slice(&e_key).unwrap();
-        let encrypted_e_key = secretbox::seal(&e_key.0, &e_nonce, &e_key);
+        let encrypted_e_key = secretbox::seal(&e_asym_key.0, &e_nonce, &e_key);
 
         let s_salt = pwhash::gen_salt();
         let s_nonce = secretbox::gen_nonce();
         let mut s_key = [0; secretbox::KEYBYTES];
         pwhash::derive_key_interactive(&mut s_key, pin.as_bytes(), &s_salt);
         let s_key = secretbox::Key::from_slice(&s_key).unwrap();
-        let encrypted_s_key = secretbox::seal(&s_key.0, &s_nonce, &s_key);
+        let encrypted_s_key = secretbox::seal(&s_asym_key.0, &s_nonce, &s_key);
 
         EncryptedSodiumPrivateKey {
             encrypt_salt: e_salt,
@@ -98,7 +103,7 @@ impl EncryptedSodiumPrivateKey {
         }
     }
 
-    fn decrypt_key(self, pwd: &str) -> Option<UnencryptedSodiumPrivateKey> {
+    pub fn decrypt_key(self, pwd: &str) -> Option<UnencryptedSodiumPrivateKey> {
         let enc_key = decrypt_key_param(
             &self.encrypt_key,
             pwd,
@@ -155,7 +160,7 @@ pub fn get_private_device_ids(
     trusted_keys: &HashMap<String, PublicKey>,
     device_keys: &Vec<PrivateKeyWrapper>,
 ) -> Vec<String> {
-    let device_ids = Vec::new();
+    let mut device_ids = Vec::new();
 
     for device_key in device_keys {
         if trusted_keys.contains_key(&device_key.device_id) {
@@ -163,12 +168,9 @@ pub fn get_private_device_ids(
         }
     }
 
-    for (device_id, pkey) in trusted_keys {
+    for (_, pkey) in trusted_keys {
         match pkey {
             PublicKey::Sodium(_) => {}
-            _ => {
-                device_ids.push(device_id.to_string());
-            }
         }
     }
     device_ids
@@ -182,7 +184,7 @@ fn decrypt_key_param(payload: &[u8], pwd: &str, salt: &Salt, nonce: &Nonce) -> O
 }
 
 pub fn generate_key(keychain: &mut KeyChain) {
-    let mut device_id = String::new();
+    let mut device_id: String;
     loop {
         device_id = util::prompt_user("Please enter a device name");
         if !keychain.is_valid_device_id(&device_id) {
@@ -221,6 +223,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
             event: new_key_event,
             signature: sig,
         };
+        public::write_head(&new_link.get_digest());
         keychain.chain.push(new_link);
     } else {
         let head = get_head();
@@ -229,7 +232,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
             eprintln!("Invalid keychain detected");
             std::process::exit(1);
         }
-        let mut trusted_keys = trusted_keys.unwrap();
+        let trusted_keys = trusted_keys.unwrap();
         let trusted_device_keys = get_device_keys();
         let mut signers = Vec::new();
         let mut signer_keys = Vec::new();
@@ -239,28 +242,22 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
                 signer_keys.push(device_key.device_id);
             }
         }
-        trusted_keys = trusted_keys
-            .into_iter()
-            .filter(|(_, pkey)| match pkey {
-                PublicKey::Sodium(_) => false,
-            })
-            .collect();
         signers.push("another device".to_string());
         signer_keys.push("another device".to_string());
         loop {
-            let mut option = String::new();
-            let mut key_option = String::new();
+            let option: String;
+            let key_option: String;
             if signers.len() == 1 {
-                option = signers[0];
-                key_option = signer_keys[0];
+                option = signers[0].clone();
+                key_option = signer_keys[0].clone();
             } else {
                 let user_option = util::user_menu(
                     "Please choose a device/key to sign your new key",
                     &signers.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
                     Some(0),
                 );
-                option = signers[user_option];
-                key_option = signer_keys[user_option];
+                option = signers[user_option].clone();
+                key_option = signer_keys[user_option].clone();
             }
 
             if option == "another device" {

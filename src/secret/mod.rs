@@ -1,5 +1,5 @@
-mod decrypt;
-mod encrypt;
+pub mod decrypt;
+pub mod encrypt;
 
 use crate::util::base32_decode;
 use crate::util::base32_encode;
