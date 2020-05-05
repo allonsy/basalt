@@ -1,3 +1,4 @@
+use super::SecretStore;
 use super::SecretStoreFormat;
 use crate::agent::client;
 use crate::agent::protocol::DecryptRequest;
@@ -5,8 +6,10 @@ use crate::config;
 use crate::keys::private;
 use crate::keys::public;
 use crate::keys::public::KeyChain;
+use crate::keys::public::PublicKey;
 use crate::util;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -28,36 +31,46 @@ pub fn decrypt(path: &Path) -> Result<Vec<u8>, String> {
         .verify(keychain_head)
         .ok_or("Invalid keychain in store".to_string())?;
 
-    let recipient_map = secret_store
+    let local_keys = device_keys
+        .into_iter()
+        .map(|k| k.device_id)
+        .collect::<HashSet<String>>();
+    let dec_packets = build_request(&secret_store, &trusted_keys, &local_keys);
+    client::decrypt(dec_packets)
+}
+
+pub fn build_request(
+    secret_store: &SecretStore,
+    trusted_keys: &HashMap<String, &PublicKey>,
+    local_keys: &HashSet<String>,
+) -> Vec<DecryptRequest> {
+    let recipients = secret_store
         .recipients
         .iter()
-        .map(|r| (r.device_id.clone(), r.encrypted_box.as_slice()))
-        .collect::<HashMap<String, &[u8]>>();
+        .map(|r| (r.device_id.to_string(), r.encrypted_box.clone()))
+        .collect::<HashMap<String, Vec<u8>>>();
+
     let mut decrypt_ids = Vec::new();
-
-    for device_key in device_keys {
-        if recipient_map.contains_key(&device_key.device_id) {
-            decrypt_ids.push(device_key.device_id.clone());
+    for key in local_keys {
+        if recipients.contains_key(key) && trusted_keys.contains_key(key) {
+            decrypt_ids.push(key);
         }
     }
 
-    for (device_id, pkey) in trusted_keys {
-        if recipient_map.contains_key(&device_id) {
-            match pkey {
-                public::PublicKey::Sodium(_) => {}
-            }
+    for (_, pkey) in trusted_keys {
+        match pkey {
+            PublicKey::Sodium(_) => {}
         }
     }
 
-    let dec_packets = decrypt_ids
-        .iter()
-        .map(|id| -> DecryptRequest {
-            let encoded_payload = util::base32_encode(recipient_map.get(id).unwrap());
+    decrypt_ids
+        .into_iter()
+        .map(|id| {
+            let encoded_payload = util::base32_encode(recipients.get(id).unwrap());
             DecryptRequest {
                 private_key_id: id.to_string(),
                 payload: encoded_payload,
             }
         })
-        .collect();
-    client::decrypt(dec_packets)
+        .collect()
 }

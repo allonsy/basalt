@@ -60,7 +60,7 @@ pub fn encrypt_secret(path: &Path, payload: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("Unable to write to file: {}", e))
 }
 
-fn load_keys_for_file(path: &Path) -> Result<Vec<String>, String> {
+pub fn load_keys_for_file(path: &Path) -> Result<Vec<String>, String> {
     let store_path = config::get_store_dir();
     let full_path = store_path.join(path);
 
@@ -79,7 +79,7 @@ fn load_keys_for_file(path: &Path) -> Result<Vec<String>, String> {
         File::open(file_path).map_err(|e| format!("Unable to read device id file: {}", e))?;
     let line_reader = BufReader::new(keys_file);
 
-    let device_ids = Vec::new();
+    let mut device_ids = Vec::new();
     for line in line_reader.lines() {
         if line.is_err() {
             return Err(format!(

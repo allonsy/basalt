@@ -39,12 +39,12 @@ pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
         payload,
     };
     let req = Request::Sign(req);
-    let response = send_requests(&vec![req])?;
+    let mut response = send_requests(&vec![req])?;
 
     if response.is_empty() {
         return Err("No response provided for request".to_string());
     }
-    let sign_resp = response[0];
+    let sign_resp = response.remove(0);
     match sign_resp {
         Response::Success(sign_str) => {
             let decoded = util::base32_decode(&sign_str);
@@ -60,11 +60,11 @@ pub fn sign(sign_id: &str, message: &[u8]) -> Result<Vec<u8>, String> {
 
 pub fn decrypt(recipients: Vec<DecryptRequest>) -> Result<Vec<u8>, String> {
     let req = Request::Decrypt(recipients);
-    let resp = send_requests(&vec![req])?;
+    let mut resp = send_requests(&vec![req])?;
     if resp.is_empty() {
         return Err("No response from agent".to_string());
     }
-    let resp = resp[0];
+    let resp = resp.remove(0);
     match resp {
         Response::Success(dec_str) => {
             let decoded = util::base32_decode(&dec_str);
@@ -76,4 +76,28 @@ pub fn decrypt(recipients: Vec<DecryptRequest>) -> Result<Vec<u8>, String> {
         }
         Response::Failure(err_msg) => Err(err_msg),
     }
+}
+
+pub fn batch_decrypt(
+    requests: Vec<Vec<DecryptRequest>>,
+) -> Result<Vec<Result<Vec<u8>, String>>, String> {
+    let requests = requests
+        .into_iter()
+        .map(|req| Request::Decrypt(req))
+        .collect();
+    let resp = send_requests(&requests)?;
+    Ok(resp
+        .into_iter()
+        .map(|resp| match resp {
+            Response::Success(dec_str) => {
+                let decoded = util::base32_decode(&dec_str);
+                if decoded.is_none() {
+                    Err("Unable to parse decrypt response".to_string())
+                } else {
+                    Ok(decoded.unwrap())
+                }
+            }
+            Response::Failure(err_msg) => Err(err_msg),
+        })
+        .collect())
 }

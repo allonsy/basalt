@@ -1,5 +1,6 @@
 pub mod decrypt;
 pub mod encrypt;
+pub mod reencrypt;
 
 use crate::util::base32_decode;
 use crate::util::base32_encode;
@@ -9,12 +10,14 @@ use sodiumoxide::crypto::secretbox::Nonce;
 
 pub use encrypt::encrypt_secret;
 
+#[derive(Clone)]
 struct SecretStore {
     nonce: Nonce,
     encrypted_payload: Vec<u8>,
     recipients: Vec<Recipient>,
 }
 
+#[derive(Clone)]
 struct Recipient {
     device_id: String,
     encrypted_box: Vec<u8>,
