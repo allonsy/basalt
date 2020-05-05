@@ -27,7 +27,7 @@ pub fn encrypt_secret(path: &Path, payload: &[u8]) -> Result<(), String> {
     let mut device_keys: HashMap<String, &PublicKey> = HashMap::new();
     for device_id in keys {
         if trusted_keys.contains_key(&device_id) {
-            device_keys.insert(device_id, trusted_keys.get(&device_id).unwrap());
+            device_keys.insert(device_id.clone(), trusted_keys.get(&device_id).unwrap());
         }
     }
 

@@ -17,7 +17,7 @@ pub fn init() {
     if write_res.is_err() {
         std::process::exit(1);
     }
-    match new_keychain.chain[0].event {
+    match &new_keychain.chain[0].event {
         public::KeyEvent::NewKey(pkey) => {
             let device_id_file = config::get_store_dir().join(config::DEVICE_ID_FILE_NAME);
             let write_res = fs::write(device_id_file, format!("{}\n", pkey.device_id));

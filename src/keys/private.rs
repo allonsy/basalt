@@ -21,7 +21,6 @@ use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::secretbox;
 use sodiumoxide::crypto::secretbox::Nonce;
 use sodiumoxide::crypto::sign;
-use std::collections::HashMap;
 use std::fs;
 
 #[derive(Serialize, Deserialize)]
@@ -64,7 +63,7 @@ pub enum SodiumPrivateKey {
 }
 
 #[derive(Serialize, Deserialize)]
-struct EncryptedSodiumPrivateKey {
+pub struct EncryptedSodiumPrivateKey {
     encrypt_salt: Salt,
     encrypt_nonce: Nonce,
     encrypt_key: Vec<u8>,
@@ -82,14 +81,14 @@ impl EncryptedSodiumPrivateKey {
         let e_salt = pwhash::gen_salt();
         let e_nonce = secretbox::gen_nonce();
         let mut e_key = [0; secretbox::KEYBYTES];
-        pwhash::derive_key_interactive(&mut e_key, pin.as_bytes(), &e_salt);
+        pwhash::derive_key_interactive(&mut e_key, pin.as_bytes(), &e_salt).unwrap();
         let e_key = secretbox::Key::from_slice(&e_key).unwrap();
         let encrypted_e_key = secretbox::seal(&e_asym_key.0, &e_nonce, &e_key);
 
         let s_salt = pwhash::gen_salt();
         let s_nonce = secretbox::gen_nonce();
         let mut s_key = [0; secretbox::KEYBYTES];
-        pwhash::derive_key_interactive(&mut s_key, pin.as_bytes(), &s_salt);
+        pwhash::derive_key_interactive(&mut s_key, pin.as_bytes(), &s_salt).unwrap();
         let s_key = secretbox::Key::from_slice(&s_key).unwrap();
         let encrypted_s_key = secretbox::seal(&s_asym_key.0, &s_nonce, &s_key);
 
@@ -103,7 +102,7 @@ impl EncryptedSodiumPrivateKey {
         }
     }
 
-    pub fn decrypt_key(self, pwd: &str) -> Option<UnencryptedSodiumPrivateKey> {
+    pub fn decrypt_key(&self, pwd: &str) -> Option<UnencryptedSodiumPrivateKey> {
         let enc_key = decrypt_key_param(
             &self.encrypt_key,
             pwd,
@@ -121,7 +120,7 @@ impl EncryptedSodiumPrivateKey {
 }
 
 #[derive(Serialize, Deserialize)]
-struct UnencryptedSodiumPrivateKey {
+pub struct UnencryptedSodiumPrivateKey {
     encrypt_key: box_::SecretKey,
     sign_key: sign::SecretKey,
 }
@@ -154,26 +153,6 @@ pub fn get_device_keys() -> Vec<PrivateKeyWrapper> {
         }
     }
     device_keys
-}
-
-pub fn get_private_device_ids(
-    trusted_keys: &HashMap<String, PublicKey>,
-    device_keys: &Vec<PrivateKeyWrapper>,
-) -> Vec<String> {
-    let mut device_ids = Vec::new();
-
-    for device_key in device_keys {
-        if trusted_keys.contains_key(&device_key.device_id) {
-            device_ids.push(device_key.device_id.to_string());
-        }
-    }
-
-    for (_, pkey) in trusted_keys {
-        match pkey {
-            PublicKey::Sodium(_) => {}
-        }
-    }
-    device_ids
 }
 
 fn decrypt_key_param(payload: &[u8], pwd: &str, salt: &Salt, nonce: &Nonce) -> Option<Vec<u8>> {
@@ -261,7 +240,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
             }
 
             if option == "another device" {
-                let new_key_event = KeyEvent::KeySignRequest(pubkey_wrapper);
+                let new_key_event = KeyEvent::KeySignRequest(pubkey_wrapper.clone());
                 let sig_message = util::concat(&keychain.get_digest(), &new_key_event.get_digest());
                 let sig_payload = sign::sign_detached(&sig_message, &sec_sign_key).0.to_vec();
                 let sig = KeyEventSignature {
@@ -277,7 +256,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
                 break;
             } else {
                 let signer_id = key_option;
-                let new_key_event = KeyEvent::NewKey(pubkey_wrapper);
+                let new_key_event = KeyEvent::NewKey(pubkey_wrapper.clone());
                 let sign_message =
                     util::concat(&keychain.get_digest(), &new_key_event.get_digest());
                 let sig_payload = client::sign(&signer_id, &sign_message);

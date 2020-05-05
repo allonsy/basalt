@@ -7,7 +7,7 @@ pub fn generate_key() {
         eprintln!("Unable to read keychain file, please init repo first");
         std::process::exit(1);
     }
-    let keychain = keychain.unwrap();
+    let mut keychain = keychain.unwrap();
 
     private::generate_key(&mut keychain);
     let write_res = keychain.write_keychain();

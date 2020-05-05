@@ -67,7 +67,7 @@ pub fn start_server() -> Result<(), String> {
                 let st = shared_state.clone();
                 thread::spawn(|| handle_connection(st, conn));
             }
-            Err(e) => {}
+            Err(_) => {}
         }
     }
     Ok(())
@@ -133,7 +133,7 @@ fn decrypt_packet(
             locked_state.err().unwrap()
         ));
     }
-    let locked_state = locked_state.unwrap();
+    let mut locked_state = locked_state.unwrap();
 
     for dec_req in decrypt_packets {
         load_key(&dec_req.private_key_id, locked_state.deref_mut());
@@ -167,7 +167,7 @@ fn sign_packet(st: SharedState, sign: protocol::SignRequest) -> protocol::Respon
             locked_state.err().unwrap()
         ));
     }
-    let locked_state = locked_state.unwrap();
+    let mut locked_state = locked_state.unwrap();
     load_key(&sign.private_key_id, locked_state.deref_mut());
     let key = locked_state.keys.get(&sign.private_key_id);
     if key.is_none() {

@@ -12,7 +12,7 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct KeyChain {
     pub chain: Vec<ChainLink>,
 }
@@ -26,7 +26,8 @@ impl KeyChain {
         let chain_file = config::get_chain_file();
         let chain_contents = fs::read_to_string(chain_file)
             .map_err(|e| format!("Unable to read chain file: {}", e))?;
-        serde_json::from_str(&chain_contents).map_err(|e| format!("Unable to parse keychain json"))
+        serde_json::from_str(&chain_contents)
+            .map_err(|e| format!("Unable to parse keychain json: {}", e))
     }
 
     pub fn write_keychain(&self) -> Result<(), String> {
@@ -39,10 +40,10 @@ impl KeyChain {
 
     pub fn is_valid_device_id(&self, device_id: &str) -> bool {
         let mut valid_names = HashSet::new();
-        for link in self.chain {
-            match link.event {
-                KeyEvent::NewKey(wrap) => valid_names.insert(wrap.device_id),
-                KeyEvent::KeySignRequest(wrap) => valid_names.insert(wrap.device_id),
+        for link in self.chain.iter() {
+            match &link.event {
+                KeyEvent::NewKey(wrap) => valid_names.insert(wrap.device_id.to_string()),
+                KeyEvent::KeySignRequest(wrap) => valid_names.insert(wrap.device_id.to_string()),
                 KeyEvent::KeyRevoke(wrap) => valid_names.remove(&wrap.device_id),
             };
         }
@@ -65,7 +66,7 @@ impl KeyChain {
         let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
         let mut is_genesis = true;
-        let mut parent_digest: Option<Vec<u8>> = None;
+        let parent_digest: Option<Vec<u8>> = None;
         let mut new_head = Vec::new();
         let chain_length = self.chain.len();
 
@@ -82,7 +83,7 @@ impl KeyChain {
             }
             let link_digest = link.get_digest();
 
-            match link.event {
+            match &link.event {
                 KeyEvent::NewKey(wrap) => {
                     let signing_key = trusted_keys.get(&link.signature.signing_key_id);
                     if signing_key.is_none() {
@@ -97,7 +98,7 @@ impl KeyChain {
                     {
                         return None;
                     }
-                    trusted_keys.insert(wrap.device_id, &wrap.key);
+                    trusted_keys.insert(wrap.device_id.clone(), &wrap.key);
                     new_head = link_digest.clone();
                 }
                 KeyEvent::KeyRevoke(wrap) => {
@@ -148,7 +149,7 @@ impl KeyChain {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ChainLink {
     pub parent: Vec<u8>,
     pub event: KeyEvent,
@@ -164,7 +165,7 @@ impl ChainLink {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum KeyEvent {
     NewKey(PublicKeyWrapper),
     KeySignRequest(PublicKeyWrapper),
@@ -183,7 +184,7 @@ impl KeyEvent {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct KeyEventSignature {
     pub signing_key_id: String,
     pub payload: Vec<u8>,
@@ -195,7 +196,7 @@ impl KeyEventSignature {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PublicKeyWrapper {
     pub device_id: String,
     pub key: PublicKey,
@@ -215,7 +216,7 @@ impl PublicKeyWrapper {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum PublicKey {
     Sodium(SodiumKey),
 }
@@ -243,10 +244,10 @@ impl PublicKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SodiumKey {
-    enc_key: box_::PublicKey,
-    sign_key: sign::PublicKey,
+    pub enc_key: box_::PublicKey,
+    pub sign_key: sign::PublicKey,
 }
 
 impl SodiumKey {

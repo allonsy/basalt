@@ -35,7 +35,7 @@ pub fn get_password_dir() -> PathBuf {
 }
 
 pub fn get_pubkey_dir() -> PathBuf {
-    let store_dir = get_pubkey_dir();
+    let store_dir = get_store_dir();
     let pubkey_dir = store_dir.join(".keys");
     init(&pubkey_dir);
     pubkey_dir

@@ -11,7 +11,7 @@ use sodiumoxide::crypto::secretbox::Nonce;
 pub use encrypt::encrypt_secret;
 
 #[derive(Clone)]
-struct SecretStore {
+pub struct SecretStore {
     nonce: Nonce,
     encrypted_payload: Vec<u8>,
     recipients: Vec<Recipient>,
