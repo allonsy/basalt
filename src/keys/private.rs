@@ -40,7 +40,9 @@ impl PrivateKey {
             PrivateKey::Sodium(SodiumPrivateKey::Unencrypted(skey)) => {
                 Ok(sign::sign_detached(message, &skey.sign_key).0.to_vec())
             }
-            _ => Err("private key doesn't support sign operations".to_string()),
+            PrivateKey::Sodium(SodiumPrivateKey::Encrypted(_)) => {
+                Err("private key doesn't support sign operations".to_string())
+            }
         }
     }
 
@@ -51,7 +53,9 @@ impl PrivateKey {
                 let plaintext = sealedbox::open(ciphertext, &pub_key, &skey.encrypt_key);
                 plaintext.map_err(|_| "decrypt operation failure".to_string())
             }
-            _ => Err("private key doesn't support decrypt operations".to_string()),
+            PrivateKey::Sodium(SodiumPrivateKey::Encrypted(_)) => {
+                Err("private key doesn't support decrypt operations".to_string())
+            }
         }
     }
 }
@@ -109,8 +113,7 @@ impl EncryptedSodiumPrivateKey {
             &self.encrypt_salt,
             &self.encrypt_nonce,
         )?;
-        let sign_key =
-            decrypt_key_param(&self.encrypt_key, pwd, &self.sign_salt, &self.sign_nonce)?;
+        let sign_key = decrypt_key_param(&self.sign_key, pwd, &self.sign_salt, &self.sign_nonce)?;
 
         Some(UnencryptedSodiumPrivateKey {
             encrypt_key: box_::SecretKey::from_slice(&enc_key)?,
@@ -191,17 +194,18 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
 
     if keychain.is_empty() {
         let new_key_event = KeyEvent::NewKey(pubkey_wrapper);
-        let sig_message = util::concat(&keychain.get_digest(), &new_key_event.get_digest());
-        let sig_payload = sign::sign_detached(&sig_message, &sec_sign_key).0.to_vec();
         let sig = KeyEventSignature {
             signing_key_id: device_id.to_string(),
-            payload: sig_payload,
+            payload: Vec::new(),
         };
-        let new_link = ChainLink {
+        let mut new_link = ChainLink {
             parent: Vec::new(),
             event: new_key_event,
             signature: sig,
         };
+        let sig_message = &new_link.get_sig_payload();
+        let sig_payload = sign::sign_detached(&sig_message, &sec_sign_key).0.to_vec();
+        new_link.signature.payload = sig_payload;
         public::write_head(&new_link.get_digest());
         keychain.chain.push(new_link);
     } else {
@@ -241,24 +245,33 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
 
             if option == "another device" {
                 let new_key_event = KeyEvent::KeySignRequest(pubkey_wrapper.clone());
-                let sig_message = util::concat(&keychain.get_digest(), &new_key_event.get_digest());
-                let sig_payload = sign::sign_detached(&sig_message, &sec_sign_key).0.to_vec();
                 let sig = KeyEventSignature {
                     signing_key_id: device_id.to_string(),
-                    payload: sig_payload,
+                    payload: Vec::new(),
                 };
-                let new_link = ChainLink {
+                let mut new_link = ChainLink {
                     parent: keychain.get_digest(),
                     event: new_key_event,
                     signature: sig,
                 };
+                let sig_message = new_link.get_sig_payload();
+                let sig_payload = sign::sign_detached(&sig_message, &sec_sign_key).0.to_vec();
+                new_link.signature.payload = sig_payload;
                 keychain.chain.push(new_link);
                 break;
             } else {
                 let signer_id = key_option;
                 let new_key_event = KeyEvent::NewKey(pubkey_wrapper.clone());
-                let sign_message =
-                    util::concat(&keychain.get_digest(), &new_key_event.get_digest());
+                let sig = KeyEventSignature {
+                    signing_key_id: signer_id.clone(),
+                    payload: Vec::new(),
+                };
+                let mut new_link = ChainLink {
+                    parent: keychain.get_digest(),
+                    event: new_key_event,
+                    signature: sig,
+                };
+                let sign_message = new_link.get_sig_payload();
                 let sig_payload = client::sign(&signer_id, &sign_message);
                 if sig_payload.is_err() {
                     println!(
@@ -267,15 +280,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
                     );
                     continue;
                 }
-                let sig = KeyEventSignature {
-                    signing_key_id: signer_id,
-                    payload: sig_payload.unwrap(),
-                };
-                let new_link = ChainLink {
-                    parent: keychain.get_digest(),
-                    event: new_key_event,
-                    signature: sig,
-                };
+                new_link.signature.payload = sig_payload.unwrap();
                 keychain.chain.push(new_link);
                 break;
             }

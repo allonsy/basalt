@@ -224,6 +224,7 @@ fn load_key(key_id: &str, st: &mut ServerState) {
                             decrypted_key.unwrap(),
                         )),
                     );
+                    break;
                 }
             }
         }

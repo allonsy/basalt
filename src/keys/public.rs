@@ -65,37 +65,39 @@ impl KeyChain {
     pub fn verify(&self, head: Option<Vec<u8>>) -> Option<HashMap<String, &PublicKey>> {
         let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
-        let mut is_genesis = true;
-        let parent_digest: Option<Vec<u8>> = None;
+        let mut parent_digest: Option<Vec<u8>> = None;
         let mut new_head = Vec::new();
         let chain_length = self.chain.len();
 
         for (index, link) in self.chain.iter().enumerate() {
-            if !is_genesis {
+            if index != 0 {
                 if parent_digest.is_none() {
                     return None;
                 }
                 if &link.parent != parent_digest.as_ref().unwrap() {
                     return None;
                 }
-            } else {
-                is_genesis = false;
             }
             let link_digest = link.get_digest();
+            parent_digest = Some(link_digest.clone());
 
             match &link.event {
                 KeyEvent::NewKey(wrap) => {
-                    let signing_key = trusted_keys.get(&link.signature.signing_key_id);
-                    if signing_key.is_none() {
-                        return None;
+                    let mut signing_key = trusted_keys.get(&link.signature.signing_key_id);
+                    if index != 0 {
+                        if signing_key.is_none() {
+                            return None;
+                        }
+                    } else {
+                        trusted_keys.insert(wrap.device_id.clone(), &wrap.key);
+                        signing_key = trusted_keys.get(&wrap.device_id);
                     }
-                    let sig_expected_payload =
-                        get_hash(&concat(&link.parent, &link.event.get_digest()));
-                    if signing_key
+                    let sig_expected_payload = link.get_sig_payload();
+                    if !signing_key
                         .unwrap()
                         .verify(&link.signature.payload, &sig_expected_payload)
-                        == false
                     {
+                        println!("invalid signature");
                         return None;
                     }
                     trusted_keys.insert(wrap.device_id.clone(), &wrap.key);
@@ -108,10 +110,9 @@ impl KeyChain {
                     }
                     let sig_expected_payload =
                         get_hash(&concat(&link.parent, &link.event.get_digest()));
-                    if signing_key
+                    if !signing_key
                         .unwrap()
                         .verify(&link.signature.payload, &sig_expected_payload)
-                        == false
                     {
                         return None;
                     }
@@ -121,10 +122,9 @@ impl KeyChain {
                 KeyEvent::KeySignRequest(wrap) => {
                     let sig_expected_payload =
                         get_hash(&concat(&link.parent, &link.event.get_digest()));
-                    if wrap
+                    if !wrap
                         .key
                         .verify(&link.signature.payload, &sig_expected_payload)
-                        == false
                     {
                         return None;
                     }
@@ -162,6 +162,10 @@ impl ChainLink {
             &concat(&self.parent, &self.event.get_digest()),
             &self.signature.get_digest(),
         ))
+    }
+
+    pub fn get_sig_payload(&self) -> Vec<u8> {
+        get_hash(&concat(&self.parent, &self.event.get_digest()))
     }
 }
 
@@ -257,11 +261,12 @@ impl SodiumKey {
     }
 
     fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
-        let sign_result = sign::verify(payload, &self.sign_key);
-        if sign_result.is_err() {
+        let signature = sign::Signature::from_slice(payload);
+        if signature.is_none() {
             return false;
         }
-        sign_result.unwrap() == expected
+        let signature = signature.unwrap();
+        sign::verify_detached(&signature, expected, &self.sign_key)
     }
 
     fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
