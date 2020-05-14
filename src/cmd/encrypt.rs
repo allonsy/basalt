@@ -51,7 +51,7 @@ fn get_interactive_input() -> Result<Vec<u8>> {
     };
 
     let editor_cmd = Command::new(editor).arg(&tmp_path).status()?;
-    if editor_cmd.success() {
+    if !editor_cmd.success() {
         return Err(Error::new(
             ErrorKind::Other,
             "EDITOR command didn't succeed",

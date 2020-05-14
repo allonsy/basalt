@@ -8,6 +8,7 @@ use crate::keys::public;
 use crate::keys::public::KeyChain;
 use crate::keys::public::PublicKey;
 use crate::util;
+use sodiumoxide::crypto::secretbox;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -36,7 +37,15 @@ pub fn decrypt(path: &Path) -> Result<Vec<u8>, String> {
         .map(|k| k.device_id)
         .collect::<HashSet<String>>();
     let dec_packets = build_request(&secret_store, &trusted_keys, &local_keys);
-    client::decrypt(dec_packets)
+    let sym_key = client::decrypt(dec_packets)?;
+    let sym_key =
+        secretbox::Key::from_slice(&sym_key).ok_or("Invalid decoded symmetric key".to_string())?;
+    secretbox::open(
+        &secret_store.encrypted_payload,
+        &secret_store.nonce,
+        &sym_key,
+    )
+    .map_err(|_| "Unable to decrypt message with symmetric key".to_string())
 }
 
 pub fn build_request(

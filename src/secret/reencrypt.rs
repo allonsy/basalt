@@ -76,7 +76,13 @@ fn reencrypt_dir(
             continue;
         }
         let entry_path = entry.unwrap().path();
-        if entry_path.is_file() {
+        let is_hidden = entry_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with(".");
+        if entry_path.is_file() && !is_hidden {
             reencrypt_file(
                 &entry_path,
                 &local_path.join(dir_name),
@@ -84,7 +90,7 @@ fn reencrypt_dir(
                 to_encrypt,
                 new_recipients,
             );
-        } else if entry_path.is_dir() {
+        } else if entry_path.is_dir() && !is_hidden {
             reencrypt_dir(
                 &entry_path,
                 &local_path.join(dir_name),

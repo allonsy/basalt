@@ -31,7 +31,7 @@ fn main() {
         }
         ("reencrypt", args) => {
             let args = args.unwrap();
-            let path = args.value_of("path").unwrap();
+            let path = args.value_of("path");
             cmd::reencrypt::reencrypt(path);
         }
         _ => println!("Unknown subcommand"),
@@ -71,7 +71,7 @@ fn get_args<'a, 'b>() -> App<'a, 'b> {
                 .about("Reencrypt a file")
                 .arg(
                     Arg::with_name("path")
-                        .required(true)
+                        .required(false)
                         .help("path to file to reencrypt"),
                 ),
         );
