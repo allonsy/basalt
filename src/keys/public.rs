@@ -62,7 +62,12 @@ impl KeyChain {
         self.chain[self.chain.len() - 1].get_digest()
     }
 
-    pub fn verify(&self, head: Option<Vec<u8>>) -> Option<HashMap<String, &PublicKey>> {
+    pub fn get_verified_keys(&self) -> Option<HashMap<String, &PublicKey>> {
+        let head = get_head()?;
+        self.verify(head)
+    }
+
+    fn verify(&self, head: Vec<u8>) -> Option<HashMap<String, &PublicKey>> {
         let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
         let mut parent_digest: Option<Vec<u8>> = None;
@@ -133,15 +138,15 @@ impl KeyChain {
                     }
                 }
             }
-            if head.is_some() && &link_digest == head.as_ref().unwrap() {
+            if link_digest == head {
                 is_trusted = true;
             }
         }
 
-        if head.is_some() && !is_trusted {
+        if !is_trusted {
             return None;
         } else {
-            if new_head != head.unwrap() {
+            if new_head != head {
                 write_head(&new_head);
             }
             return Some(trusted_keys);
@@ -274,7 +279,7 @@ impl SodiumKey {
     }
 }
 
-pub fn get_head() -> Option<Vec<u8>> {
+fn get_head() -> Option<Vec<u8>> {
     let head_file = config::get_chain_head_file();
     let mut contents = String::new();
     let mut head_file = File::open(head_file).ok()?;

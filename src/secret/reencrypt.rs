@@ -15,14 +15,13 @@ use std::path::PathBuf;
 pub fn reencrypt_path(path: &str) {
     let full_path = config::get_store_dir().join(path);
     let path = PathBuf::from(path);
-    let head = public::get_head();
     let keychain = public::KeyChain::get_keychain();
     if keychain.is_err() {
         eprintln!("Unable to read keychain: {}", keychain.err().unwrap());
         return;
     }
     let keychain = keychain.unwrap();
-    let trusted_keys = keychain.verify(head);
+    let trusted_keys = keychain.get_verified_keys();
     if trusted_keys.is_none() {
         eprintln!("Keychain is invalid");
         return;

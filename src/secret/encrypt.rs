@@ -19,9 +19,8 @@ pub fn encrypt_secret(path: &Path, payload: &[u8]) -> Result<(), String> {
     let keys = load_keys_for_file(path)?;
 
     let keychain = public::KeyChain::get_keychain()?;
-    let head = public::get_head();
     let trusted_keys = keychain
-        .verify(head)
+        .get_verified_keys()
         .ok_or("Invalid keychain in store".to_string())?;
 
     let mut device_keys: HashMap<String, &PublicKey> = HashMap::new();

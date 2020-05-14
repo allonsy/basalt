@@ -4,7 +4,6 @@ use crate::agent::client;
 use crate::agent::protocol::DecryptRequest;
 use crate::config;
 use crate::keys::private;
-use crate::keys::public;
 use crate::keys::public::KeyChain;
 use crate::keys::public::PublicKey;
 use crate::util;
@@ -27,9 +26,8 @@ pub fn decrypt(path: &Path) -> Result<Vec<u8>, String> {
         .ok_or("Unable to decode secret store".to_string())?;
     let device_keys = private::get_device_keys();
     let keychain = KeyChain::get_keychain()?;
-    let keychain_head = public::get_head();
     let trusted_keys = keychain
-        .verify(keychain_head)
+        .get_verified_keys()
         .ok_or("Invalid keychain in store".to_string())?;
 
     let local_keys = device_keys

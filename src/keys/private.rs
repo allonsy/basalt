@@ -1,5 +1,4 @@
 use super::public;
-use super::public::get_head;
 use super::public::ChainLink;
 use super::public::KeyChain;
 use super::public::KeyEvent;
@@ -209,8 +208,7 @@ fn generate_sodium_key(device_id: &str, keychain: &mut KeyChain) {
         public::write_head(&new_link.get_digest());
         keychain.chain.push(new_link);
     } else {
-        let head = get_head();
-        let trusted_keys = keychain.verify(head);
+        let trusted_keys = keychain.get_verified_keys();
         if trusted_keys.is_none() {
             eprintln!("Invalid keychain detected");
             std::process::exit(1);
