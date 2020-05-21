@@ -64,14 +64,20 @@ impl KeyChain {
 
     pub fn get_verified_keys(&self) -> Option<HashMap<String, &PublicKey>> {
         let head = get_head()?;
-        self.verify(head)
+        let ret = self.verify(head.clone());
+        if ret.is_some() {
+            let new_head = self.get_digest();
+            if new_head != head {
+                write_head(&new_head);
+            }
+        }
+        ret
     }
 
     fn verify(&self, head: Vec<u8>) -> Option<HashMap<String, &PublicKey>> {
         let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
         let mut parent_digest: Option<Vec<u8>> = None;
-        let mut new_head = Vec::new();
         let chain_length = self.chain.len();
 
         for (index, link) in self.chain.iter().enumerate() {
@@ -106,7 +112,6 @@ impl KeyChain {
                         return None;
                     }
                     trusted_keys.insert(wrap.device_id.clone(), &wrap.key);
-                    new_head = link_digest.clone();
                 }
                 KeyEvent::KeyRevoke(wrap) => {
                     let signing_key = trusted_keys.get(&link.signature.signing_key_id);
@@ -122,7 +127,6 @@ impl KeyChain {
                         return None;
                     }
                     trusted_keys.remove(&wrap.device_id);
-                    new_head = link_digest.clone();
                 }
                 KeyEvent::KeySignRequest(wrap) => {
                     let sig_expected_payload =
@@ -146,9 +150,6 @@ impl KeyChain {
         if !is_trusted {
             return None;
         } else {
-            if new_head != head {
-                write_head(&new_head);
-            }
             return Some(trusted_keys);
         }
     }
