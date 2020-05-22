@@ -3,13 +3,14 @@ use std::io::Write;
 
 const BASE32_ALPHABET: Alphabet = Alphabet::RFC4648 { padding: true };
 
-pub fn concat<T>(s1: &[T], s2: &[T]) -> Vec<T>
+pub fn concat<T>(slices: &[&[T]]) -> Vec<T>
 where
     T: std::clone::Clone,
 {
     let mut ret = Vec::new();
-    ret.extend_from_slice(s1);
-    ret.extend_from_slice(s2);
+    for slice in slices {
+        ret.extend_from_slice(slice);
+    }
     ret
 }
 

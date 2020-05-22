@@ -12,6 +12,9 @@ use std::fs;
 use std::fs::File;
 use std::io::Read;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct KeyChain {
     pub chain: Vec<ChainLink>,
@@ -64,17 +67,33 @@ impl KeyChain {
 
     pub fn get_verified_keys(&self) -> Option<HashMap<String, &PublicKey>> {
         let head = get_head()?;
-        let ret = self.verify(head.clone());
-        if ret.is_some() {
-            let new_head = self.get_digest();
-            if new_head != head {
-                write_head(&new_head);
-            }
-        }
-        ret
+        self.verify(head.clone(), false)
     }
 
-    fn verify(&self, head: Vec<u8>) -> Option<HashMap<String, &PublicKey>> {
+    pub fn verify_merge(&self) -> bool {
+        let head = get_head();
+        if head.is_none() {
+            return false;
+        }
+        let head = head.unwrap();
+        let res = self.verify(head.clone(), true);
+        if res.is_none() {
+            return false;
+        }
+        let new_head = self.get_digest();
+        if new_head != head {
+            write_head(&new_head);
+        }
+        res.is_some()
+    }
+
+    fn verify(&self, head: Vec<u8>, is_merge: bool) -> Option<HashMap<String, &PublicKey>> {
+        if self.is_empty() {
+            return None;
+        }
+        if !is_merge && head != self.get_digest() {
+            return None;
+        }
         let mut trusted_keys: HashMap<String, &PublicKey> = HashMap::new();
         let mut is_trusted = false;
         let mut parent_digest: Option<Vec<u8>> = None;
@@ -119,7 +138,7 @@ impl KeyChain {
                         return None;
                     }
                     let sig_expected_payload =
-                        get_hash(&concat(&link.parent, &link.event.get_digest()));
+                        get_hash(&concat(&[&link.parent, &link.event.get_digest()]));
                     if !signing_key
                         .unwrap()
                         .verify(&link.signature.payload, &sig_expected_payload)
@@ -129,8 +148,11 @@ impl KeyChain {
                     trusted_keys.remove(&wrap.device_id);
                 }
                 KeyEvent::KeySignRequest(wrap) => {
+                    if !is_merge {
+                        return None;
+                    }
                     let sig_expected_payload =
-                        get_hash(&concat(&link.parent, &link.event.get_digest()));
+                        get_hash(&concat(&[&link.parent, &link.event.get_digest()]));
                     if !wrap
                         .key
                         .verify(&link.signature.payload, &sig_expected_payload)
@@ -164,14 +186,15 @@ pub struct ChainLink {
 
 impl ChainLink {
     pub fn get_digest(&self) -> Vec<u8> {
-        get_hash(&concat(
-            &concat(&self.parent, &self.event.get_digest()),
+        get_hash(&concat(&[
+            &self.parent,
+            &self.event.get_digest(),
             &self.signature.get_digest(),
-        ))
+        ]))
     }
 
     pub fn get_sig_payload(&self) -> Vec<u8> {
-        get_hash(&concat(&self.parent, &self.event.get_digest()))
+        get_hash(&concat(&[&self.parent, &self.event.get_digest()]))
     }
 }
 
@@ -185,11 +208,13 @@ pub enum KeyEvent {
 impl KeyEvent {
     pub fn get_digest(&self) -> Vec<u8> {
         match self {
-            KeyEvent::NewKey(wrap) => get_hash(&concat("new".as_bytes(), &wrap.get_digest())),
+            KeyEvent::NewKey(wrap) => get_hash(&concat(&["new".as_bytes(), &wrap.get_digest()])),
             KeyEvent::KeySignRequest(wrap) => {
-                get_hash(&concat("sign".as_bytes(), &wrap.get_digest()))
+                get_hash(&concat(&["sign".as_bytes(), &wrap.get_digest()]))
             }
-            KeyEvent::KeyRevoke(wrap) => get_hash(&concat("revoke".as_bytes(), &wrap.get_digest())),
+            KeyEvent::KeyRevoke(wrap) => {
+                get_hash(&concat(&["revoke".as_bytes(), &wrap.get_digest()]))
+            }
         }
     }
 }
@@ -202,7 +227,7 @@ pub struct KeyEventSignature {
 
 impl KeyEventSignature {
     fn get_digest(&self) -> Vec<u8> {
-        get_hash(&concat(self.signing_key_id.as_bytes(), &self.payload))
+        get_hash(&concat(&[self.signing_key_id.as_bytes(), &self.payload]))
     }
 }
 
@@ -214,7 +239,10 @@ pub struct PublicKeyWrapper {
 
 impl PublicKeyWrapper {
     pub fn get_digest(&self) -> Vec<u8> {
-        get_hash(&concat(self.device_id.as_bytes(), &self.key.get_digest()))
+        get_hash(&concat(&[
+            self.device_id.as_bytes(),
+            &self.key.get_digest(),
+        ]))
     }
 
     pub fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
@@ -235,7 +263,7 @@ impl PublicKey {
     fn get_digest(&self) -> Vec<u8> {
         match self {
             PublicKey::Sodium(skey) => {
-                let bytes = concat("sodium".as_bytes(), &skey.get_digest());
+                let bytes = concat(&["sodium".as_bytes(), &skey.get_digest()]);
                 get_hash(&bytes)
             }
         }
@@ -262,7 +290,7 @@ pub struct SodiumKey {
 
 impl SodiumKey {
     fn get_digest(&self) -> Vec<u8> {
-        let pkey_bytes = concat(&self.enc_key.0, &self.sign_key.0);
+        let pkey_bytes = concat(&[&self.enc_key.0, &self.sign_key.0]);
         get_hash(&pkey_bytes)
     }
 
@@ -277,6 +305,41 @@ impl SodiumKey {
 
     fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
         sealedbox::seal(payload, &self.enc_key)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PaperKey {
+    pub enc_nonce: Vec<u8>,
+    pub enc_key: box_::PublicKey,
+    pub sign_nonce: Vec<u8>,
+    pub sign_key: sign::PublicKey,
+}
+
+impl PaperKey {
+    fn get_digest(&self) -> Vec<u8> {
+        let bytes = concat(&[
+            &self.enc_nonce,
+            &self.enc_key.0,
+            &self.sign_nonce,
+            &self.sign_key.0,
+        ]);
+        get_hash(&bytes)
+    }
+
+    fn to_sodium_key(&self) -> SodiumKey {
+        SodiumKey {
+            enc_key: self.enc_key.clone(),
+            sign_key: self.sign_key.clone(),
+        }
+    }
+
+    fn verify(&self, payload: &[u8], expected: &[u8]) -> bool {
+        self.to_sodium_key().verify(payload, expected)
+    }
+
+    fn encrypt(&self, payload: &[u8]) -> Vec<u8> {
+        self.to_sodium_key().encrypt(payload)
     }
 }
 

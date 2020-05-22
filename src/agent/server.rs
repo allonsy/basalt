@@ -228,5 +228,6 @@ fn load_key(key_id: &str, st: &mut ServerState) {
                 }
             }
         }
+        private::PrivateKey::PaperKey(_) => {}
     }
 }

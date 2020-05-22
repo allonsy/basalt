@@ -31,6 +31,7 @@ pub struct PrivateKeyWrapper {
 #[derive(Serialize, Deserialize)]
 pub enum PrivateKey {
     Sodium(SodiumPrivateKey),
+    PaperKey(PaperKey),
 }
 
 impl PrivateKey {
@@ -42,6 +43,7 @@ impl PrivateKey {
             PrivateKey::Sodium(SodiumPrivateKey::Encrypted(_)) => {
                 Err("private key doesn't support sign operations".to_string())
             }
+            PrivateKey::PaperKey(pkey) => pkey.get_sodium_key().sign(message),
         }
     }
 
@@ -55,6 +57,7 @@ impl PrivateKey {
             PrivateKey::Sodium(SodiumPrivateKey::Encrypted(_)) => {
                 Err("private key doesn't support decrypt operations".to_string())
             }
+            PrivateKey::PaperKey(pkey) => pkey.get_sodium_key().decrypt(ciphertext),
         }
     }
 }
@@ -121,10 +124,10 @@ impl EncryptedSodiumPrivateKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct UnencryptedSodiumPrivateKey {
-    encrypt_key: box_::SecretKey,
-    sign_key: sign::SecretKey,
+    pub encrypt_key: box_::SecretKey,
+    pub sign_key: sign::SecretKey,
 }
 
 pub fn get_device_keys() -> Vec<PrivateKeyWrapper> {
@@ -155,6 +158,17 @@ pub fn get_device_keys() -> Vec<PrivateKeyWrapper> {
         }
     }
     device_keys
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PaperKey {
+    pub key: UnencryptedSodiumPrivateKey,
+}
+
+impl PaperKey {
+    fn get_sodium_key(&self) -> PrivateKey {
+        PrivateKey::Sodium(SodiumPrivateKey::Unencrypted(self.key.clone()))
+    }
 }
 
 fn decrypt_key_param(payload: &[u8], pwd: &str, salt: &Salt, nonce: &Nonce) -> Option<Vec<u8>> {
