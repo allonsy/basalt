@@ -1,6 +1,9 @@
+pub mod command;
+pub mod generate;
 pub mod keychain;
 pub mod passphrase;
 pub mod private;
 pub mod public;
+pub mod secret;
 pub mod state;
 pub mod vault;

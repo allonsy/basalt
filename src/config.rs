@@ -4,14 +4,21 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub fn get_store_directory() -> PathBuf {
+pub fn get_app_dir() -> PathBuf {
     let home_dir = dirs::home_dir();
     if home_dir.is_none() {
         eprintln!("Unable to retrieve home directory");
         std::process::exit(1);
     }
     let home_dir = home_dir.unwrap();
-    let store_dir = home_dir.join(constants::APP_DIR_NAME);
+    let app_dir = home_dir.join(constants::APP_DIR_NAME);
+    create_dir(&app_dir);
+    app_dir
+}
+
+pub fn get_store_directory() -> PathBuf {
+    let app_dir = get_app_dir();
+    let store_dir = app_dir.join(constants::STORE_DIR_NAME);
     create_dir(&store_dir);
     store_dir
 }

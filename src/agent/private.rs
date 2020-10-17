@@ -1,3 +1,4 @@
+use super::public;
 use crate::config;
 use glob::glob;
 use serde::Deserialize;
@@ -18,9 +19,18 @@ pub struct SodiumPrivateKey {
 }
 
 impl SodiumPrivateKey {
-    fn gen_key() -> SodiumPrivateKey {
+    pub fn gen_key() -> SodiumPrivateKey {
         let (_, sec_key) = box_::gen_keypair();
         SodiumPrivateKey { dec_key: sec_key }
+    }
+
+    pub fn get_public_key(&self, key_name: &str) -> public::PublicKeyWrapper {
+        let sodium_public_key = self.dec_key.public_key();
+        let sodium_public_key = public::SodiumKey {
+            name: key_name.to_string(),
+            enc_key: sodium_public_key,
+        };
+        public::PublicKeyWrapper::Sodium(sodium_public_key)
     }
 }
 
@@ -40,7 +50,7 @@ pub struct EncryptedSodiumKey {
 }
 
 impl EncryptedSodiumKey {
-    fn encrypt_key(key: &SodiumPrivateKey, pwd: &[u8]) -> Result<EncryptedSodiumKey, String> {
+    pub fn encrypt_key(key: &SodiumPrivateKey, pwd: &[u8]) -> Result<EncryptedSodiumKey, String> {
         let salt = pwhash::gen_salt();
         let nonce = secretbox::gen_nonce();
         let mut sym_key: [u8; secretbox::KEYBYTES] = [0; secretbox::KEYBYTES];
@@ -56,7 +66,7 @@ impl EncryptedSodiumKey {
         })
     }
 
-    fn decrypt_key(&self, pwd: &[u8]) -> Result<SodiumPrivateKey, String> {
+    pub fn decrypt_key(&self, pwd: &[u8]) -> Result<SodiumPrivateKey, String> {
         let mut sym_key: [u8; secretbox::KEYBYTES] = [0; secretbox::KEYBYTES];
         pwhash::derive_key_interactive(&mut sym_key, pwd, &self.salt)
             .map_err(|_| "Insufficient memory for hashing".to_string())?;

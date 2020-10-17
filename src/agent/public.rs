@@ -8,7 +8,7 @@ pub trait PublicKey {
     fn encrypt(&self, message: &[u8]) -> Vec<u8>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum PublicKeyWrapper {
     Sodium(SodiumKey),
     PaperKey(PaperKey),
@@ -56,7 +56,7 @@ impl PublicKey for PublicKeyWrapper {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SodiumKey {
     pub name: String,
     pub enc_key: box_::PublicKey,
@@ -72,7 +72,7 @@ impl PublicKey for SodiumKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PaperKey {
     pub name: String,
     pub enc_key: box_::PublicKey,
@@ -88,7 +88,7 @@ impl PublicKey for PaperKey {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Yubikey {
     pub name: String,
     pub enc_key: box_::PublicKey,
