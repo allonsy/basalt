@@ -16,6 +16,11 @@ pub fn get_app_dir() -> PathBuf {
     app_dir
 }
 
+pub fn get_agent_socket_file() -> PathBuf {
+    let app_dir = get_app_dir();
+    app_dir.join(constants::SOCKET_NAME)
+}
+
 pub fn get_store_directory() -> PathBuf {
     let app_dir = get_app_dir();
     let store_dir = app_dir.join(constants::STORE_DIR_NAME);

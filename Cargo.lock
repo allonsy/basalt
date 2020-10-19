@@ -51,8 +51,8 @@ dependencies = [
  "base32",
  "clap",
  "dirs",
+ "fork",
  "glob",
- "nix",
  "serde",
  "serde_json",
  "sodiumoxide",
@@ -176,6 +176,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fork"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48ab1b42fd10696f85fa0bd0856da17ba05b18d527dbaf846359441ecb808d92"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -215,9 +224,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.68"
+version = "0.2.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dea0c0405123bba743ee3f91f49b1c7cfb684eef0da0a50110f758ccf24cdff0"
+checksum = "2448f6066e80e3bfc792e9c98bf705b4b0fc6e8ef5b43e5889aff0eaa9c58743"
 
 [[package]]
 name = "libflate"
@@ -243,19 +252,6 @@ dependencies = [
  "pkg-config",
  "tar",
  "vcpkg",
-]
-
-[[package]]
-name = "nix"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e4785f2c3b7589a0d0c1dd60285e1188adac4006e8abd6dd578e1567027363"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if",
- "libc",
- "void",
 ]
 
 [[package]]
@@ -502,12 +498,6 @@ name = "vec_map"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "05c78687fb1a80548ae3250346c3db86a80a7cdd77bda190189f2d0a0987c81a"
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 
 [[package]]
 name = "wasi"

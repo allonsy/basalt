@@ -111,3 +111,11 @@ impl State {
         }
     }
 }
+
+impl Clone for State {
+    fn clone(&self) -> State {
+        State {
+            keys: self.keys.clone(),
+        }
+    }
+}
