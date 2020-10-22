@@ -1,7 +1,8 @@
 mod agent;
+mod client;
 mod config;
 mod constants;
 
 pub fn main() {
-    println!("hello");
+    client::app::run_client();
 }

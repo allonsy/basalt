@@ -60,7 +60,7 @@ impl Vault {
                 let payload = r.encrypt(&sym_key.0);
                 Recipient {
                     pub_key: r,
-                    payload: payload,
+                    payload,
                 }
             })
             .collect();
@@ -98,18 +98,16 @@ impl Vault {
         return Ok(decrypted_contents.unwrap());
     }
 
-    pub fn unlock_vault(st: state::State, path: &str) -> Result<Vec<u8>, String> {
+    pub fn unlock_vault(st: &mut state::State, path: &str) -> Result<Vec<u8>, String> {
         let vault = Vault::read_vault(path)?;
-        let mut key_store = st
-            .keys
-            .lock()
-            .map_err(|e| format!("Unable to lock keystore: {}", e))?;
         for recipient in vault.recipients.iter() {
-            if key_store
+            if st
+                .keys
                 .unlocked
                 .contains_key(recipient.pub_key.get_key_name())
             {
-                let priv_key = key_store
+                let priv_key = st
+                    .keys
                     .unlocked
                     .get(recipient.pub_key.get_key_name())
                     .unwrap();
@@ -123,7 +121,7 @@ impl Vault {
         }
 
         for recipient in vault.recipients.iter() {
-            let priv_key = key_store.try_unlock(recipient.pub_key.get_key_name());
+            let priv_key = st.keys.try_unlock(recipient.pub_key.get_key_name());
             if priv_key.is_none() {
                 continue;
             }

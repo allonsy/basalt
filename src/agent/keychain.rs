@@ -9,7 +9,6 @@ use serde::Serialize;
 use serde_json;
 use std::collections::HashMap;
 use std::path::Path;
-use std::path::PathBuf;
 use std::time;
 
 #[derive(Serialize, Deserialize)]
@@ -20,6 +19,16 @@ pub struct KeyChain {
 }
 
 impl KeyChain {
+    fn new() -> Self {
+        let mut chain = KeyChain {
+            timestamp: 0,
+            keys: Vec::new(),
+            paths: HashMap::new(),
+        };
+        chain.update_timestamp();
+        chain
+    }
+
     pub fn add_key(&mut self, key: PublicKeyWrapper) {
         let new_key_name = key.get_key_name();
         let mut replace = false;
@@ -57,15 +66,19 @@ impl KeyChain {
         vault::Vault::write_vault(&KeyChain::get_keychain_path(), &payload, recipients);
     }
 
-    pub fn read_chain(st: state::State) -> Result<Self, String> {
-        let payload = vault::Vault::unlock_vault(st, &KeyChain::get_keychain_path())?;
+    pub fn read_chain(st: &mut state::State) -> Result<Self, String> {
+        let chain_path = Self::get_keychain_path();
+        if !Path::new(&chain_path).exists() {
+            return Ok(Self::new());
+        }
+        let payload = vault::Vault::unlock_vault(st, &chain_path)?;
         serde_json::from_slice(&payload)
             .map_err(|e| format!("Unable to read keychain vault: {}", e))
     }
 
     pub fn key_names_to_keys(&self, names: &[String]) -> Vec<PublicKeyWrapper> {
         let mut key_map: HashMap<String, PublicKeyWrapper> = HashMap::new();
-        for key in self.keys {
+        for key in self.keys.iter() {
             key_map.insert(key.get_key_name().to_string(), key.clone());
         }
         let mut keys = Vec::new();

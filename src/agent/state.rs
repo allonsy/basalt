@@ -2,8 +2,6 @@ use super::passphrase;
 use super::private;
 use sodiumoxide::crypto::pwhash;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 pub struct KeyStore {
     pub unlocked: HashMap<String, Box<dyn private::PrivateKey>>,
@@ -101,21 +99,13 @@ impl LockedKey {
 }
 
 pub struct State {
-    pub keys: Arc<Mutex<KeyStore>>,
+    pub keys: KeyStore,
 }
 
 impl State {
     pub fn new() -> State {
         State {
-            keys: Arc::new(Mutex::new(KeyStore::new())),
-        }
-    }
-}
-
-impl Clone for State {
-    fn clone(&self) -> State {
-        State {
-            keys: self.keys.clone(),
+            keys: KeyStore::new(),
         }
     }
 }
