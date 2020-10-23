@@ -63,7 +63,14 @@ impl KeyChain {
         self.update_timestamp();
         let payload = serde_json::to_vec(self).unwrap();
         let recipients = self.keys.clone();
-        vault::Vault::write_vault(&KeyChain::get_keychain_path(), &payload, recipients);
+        let write_res =
+            vault::Vault::write_vault(&KeyChain::get_keychain_path(), &payload, recipients);
+        if write_res.is_err() {
+            super::log_message(&format!(
+                "Unable to write keychain: {}",
+                write_res.err().unwrap()
+            ));
+        }
     }
 
     pub fn read_chain(st: &mut state::State) -> Result<Self, String> {
