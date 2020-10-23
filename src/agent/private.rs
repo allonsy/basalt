@@ -11,9 +11,10 @@ use std::fs;
 
 pub trait PrivateKey {
     fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, String>;
+    fn duplicate(&self) -> Box<dyn PrivateKey>;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct SodiumPrivateKey {
     dec_key: box_::SecretKey,
 }
@@ -39,6 +40,10 @@ impl PrivateKey for SodiumPrivateKey {
         let pub_key = self.dec_key.public_key();
         let dec_res = sealedbox::open(ciphertext, &pub_key, &self.dec_key);
         dec_res.map_err(|_| "Unable to decrypt ciphertext".to_string())
+    }
+
+    fn duplicate(&self) -> Box<dyn PrivateKey> {
+        Box::new(self.clone())
     }
 }
 
@@ -139,24 +144,13 @@ impl DeviceKey {
         }
     }
 
-    pub fn read_key(key_name: &str) -> DeviceKey {
+    pub fn read_key(key_name: &str) -> Result<DeviceKey, String> {
         let fname = config::get_keys_directory().join(format!("{}.key", key_name));
-        let json_bytes = fs::read(&fname);
-        if json_bytes.is_err() {
-            eprintln!(
-                "Unable to read key {}: {}",
-                key_name,
-                json_bytes.err().unwrap()
-            );
-            std::process::exit(1);
+        if !fname.exists() {
+            return Err(format!("No key file for name: {}", key_name));
         }
-        let json_bytes = json_bytes.unwrap();
 
-        let parsed_key = serde_json::from_slice(&json_bytes);
-        if parsed_key.is_err() {
-            eprintln!("Unable to parse key json: {}", parsed_key.err().unwrap());
-            std::process::exit(1);
-        }
-        parsed_key.unwrap()
+        let json_bytes = fs::read(&fname).map_err(|e| format!("Unable to read key: {}", e))?;
+        serde_json::from_slice(&json_bytes).map_err(|e| format!("Unable to parse key json: {}", e))
     }
 }

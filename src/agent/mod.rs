@@ -34,6 +34,7 @@ pub fn spawn_agent() -> Result<(), String> {
 
     let mut st = state::State::new();
     for stream in listener.incoming() {
+        st.reset_session_keys();
         match stream {
             Ok(mut stream) => {
                 handle_stream(&mut st, &mut stream);

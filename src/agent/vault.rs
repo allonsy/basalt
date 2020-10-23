@@ -99,25 +99,29 @@ impl Vault {
     }
 
     pub fn unlock_vault(st: &mut state::State, path: &str) -> Result<Vec<u8>, String> {
-        let vault = Vault::read_vault(path)?;
+        let mut vault = Vault::read_vault(path)?;
         for recipient in vault.recipients.iter() {
-            if st
+            let mut priv_key = st.keys.unlocked.get(recipient.pub_key.get_key_name());
+            if priv_key.is_none() {
+                priv_key = st
+                    .keys
+                    .session_unlocked
+                    .get(recipient.pub_key.get_key_name());
+            }
+            if priv_key.is_none() {
+                continue;
+            }
+            let priv_key = st
                 .keys
                 .unlocked
-                .contains_key(recipient.pub_key.get_key_name())
-            {
-                let priv_key = st
-                    .keys
-                    .unlocked
-                    .get(recipient.pub_key.get_key_name())
-                    .unwrap();
-                let decrypted_contents = vault.try_decode_vault(&recipient, priv_key.as_ref());
-                if decrypted_contents.is_err() {
-                    eprintln!("WARNING: {}", decrypted_contents.err().unwrap());
-                    continue;
-                }
-                return decrypted_contents;
+                .get(recipient.pub_key.get_key_name())
+                .unwrap();
+            let decrypted_contents = vault.try_decode_vault(&recipient, priv_key.as_ref());
+            if decrypted_contents.is_err() {
+                super::log_message(&format!("WARNING: {}", decrypted_contents.err().unwrap()));
+                continue;
             }
+            return decrypted_contents;
         }
 
         for recipient in vault.recipients.iter() {
@@ -129,7 +133,23 @@ impl Vault {
             let priv_key = priv_key.unwrap();
             let decrypted_contents = vault.try_decode_vault(&recipient, priv_key);
             if decrypted_contents.is_err() {
-                eprintln!("WARNING: {}", decrypted_contents.err().unwrap());
+                super::log_message(&format!("WARNING: {}", decrypted_contents.err().unwrap()));
+                continue;
+            }
+            return decrypted_contents;
+        }
+
+        vault.recipients.sort_by(sort_recipient);
+        for recipient in vault.recipients.iter() {
+            let priv_key = st.keys.try_load_key(&recipient.pub_key);
+            if priv_key.is_none() {
+                continue;
+            }
+
+            let priv_key = priv_key.unwrap();
+            let decrypted_contents = vault.try_decode_vault(&recipient, priv_key);
+            if decrypted_contents.is_err() {
+                super::log_message(&format!("WARNING: {}", decrypted_contents.err().unwrap()));
                 continue;
             }
             return decrypted_contents;
