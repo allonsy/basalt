@@ -38,10 +38,22 @@ pub struct DecryptRequest {
     path: String,
 }
 
+impl DecryptRequest {
+    pub fn new(path: String) -> Self {
+        DecryptRequest { path }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct EncryptRequest {
     path: String,
     contents: Vec<u8>,
+}
+
+impl EncryptRequest {
+    pub fn new(path: String, contents: Vec<u8>) -> Self {
+        EncryptRequest { path, contents }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

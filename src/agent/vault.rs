@@ -42,7 +42,7 @@ impl Vault {
     pub fn read_vault(path: &str) -> Result<Vault, String> {
         let path = config::get_store_directory().join(path);
         let bytes = fs::read(&path).map_err(|e| format!("filesystem error: {}", e))?;
-        serde_json::from_slice(&bytes).map_err(|e| format!("json error: {}", e))?
+        serde_json::from_slice(&bytes).map_err(|e| format!("json error: {}", e))
     }
 
     pub fn write_vault(
@@ -135,6 +135,6 @@ impl Vault {
             return decrypted_contents;
         }
 
-        return Err(String::new());
+        return Err(format!("No keys able to unlock file: {}", path));
     }
 }

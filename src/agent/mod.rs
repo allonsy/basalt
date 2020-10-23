@@ -14,6 +14,7 @@ use fork::Fork;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json;
+use std::fs::OpenOptions;
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::net::UnixListener;
@@ -154,5 +155,14 @@ fn handle_stream(st: &mut state::State, stream: &mut UnixStream) {
 }
 
 fn log_message(msg: &str) {
-    eprintln!("{}", msg);
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(config::get_agent_log_file());
+    if log_file.is_err() {
+        return;
+    }
+    let mut log_file = log_file.unwrap();
+    let _ = write!(log_file, "{}\n", msg);
+    let _ = log_file.flush();
 }

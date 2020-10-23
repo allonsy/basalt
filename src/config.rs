@@ -29,7 +29,7 @@ pub fn get_store_directory() -> PathBuf {
 }
 
 pub fn get_keys_directory() -> PathBuf {
-    let store_dir = get_store_directory();
+    let store_dir = get_app_dir();
     let keys_dir = store_dir.join(constants::KEY_DIR_NAME);
     create_dir(&keys_dir);
     keys_dir
@@ -45,4 +45,9 @@ pub fn create_dir(path: &Path) {
         );
         std::process::exit(1);
     }
+}
+
+pub fn get_agent_log_file() -> PathBuf {
+    let app_dir = get_app_dir();
+    app_dir.join(constants::AGENT_LOG_FILE_NAME)
 }

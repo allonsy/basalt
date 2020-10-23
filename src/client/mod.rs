@@ -1,5 +1,7 @@
 pub mod agent_cmd;
 pub mod app;
+pub mod decrypt;
+pub mod encrypt;
 pub mod keys;
 
 use crate::agent;
@@ -62,7 +64,7 @@ fn read_line() -> String {
         eprintln!("Unable to read from user: {}", read_res.err().unwrap());
         std::process::exit(1);
     }
-    user_input
+    user_input.trim().to_string()
 }
 
 fn prompt_user(prompt: &str) -> String {

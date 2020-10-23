@@ -16,8 +16,12 @@ pub fn add_key() -> Result<(), String> {
         _ => return Err("Unknown key type".to_string()),
     };
 
-    let cmd = command::Command::AddKey(command::AddKeyRequest::new(key_name, key_type));
+    let cmd = command::Command::AddKey(command::AddKeyRequest::new(key_name.clone(), key_type));
 
-    let mut resp = send_requests(&vec![cmd]);
-    super::process_unary_response_ignore(resp)
+    let resp = send_requests(&vec![cmd]);
+    let ret = super::process_unary_response_ignore(resp);
+    if ret.is_ok() {
+        println!("Successfully added key: {}", key_name);
+    }
+    ret
 }
