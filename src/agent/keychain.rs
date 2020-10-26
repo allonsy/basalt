@@ -15,7 +15,7 @@ use std::time;
 pub struct KeyChain {
     timestamp: u128,
     keys: Vec<PublicKeyWrapper>,
-    paths: HashMap<String, Vec<String>>,
+    pub paths: HashMap<String, Vec<String>>,
 }
 
 impl KeyChain {
@@ -27,6 +27,10 @@ impl KeyChain {
         };
         chain.update_timestamp();
         chain
+    }
+
+    pub fn get_keys(&self) -> &[PublicKeyWrapper] {
+        &self.keys
     }
 
     pub fn add_key(&mut self, key: PublicKeyWrapper) {

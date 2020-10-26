@@ -16,12 +16,27 @@ pub fn add_key() -> Result<(), String> {
         _ => return Err("Unknown key type".to_string()),
     };
 
-    let cmd = command::Command::AddKey(command::AddKeyRequest::new(key_name.clone(), key_type));
+    println!("key type is: {}", key_type_input);
+    let cmd = command::Command::AddKey(command::AddKeyRequest::new(
+        key_name.clone(),
+        key_type.clone(),
+    ));
 
     let resp = send_requests(&vec![cmd]);
-    let ret = super::process_unary_response_ignore(resp);
+    let ret = super::process_unary_response(resp);
     if ret.is_ok() {
         println!("Successfully added key: {}", key_name);
     }
-    ret
+    if key_type == command::KeyType::PaperKey {
+        match ret.unwrap() {
+            command::Response::AddKey(Some(paperkey)) => {
+                println!("Your paper key: {}", paperkey);
+                println!("Please save that in a safe place!");
+                Ok(())
+            }
+            _ => Err("Unexpected response from agent (expected paper key response)".to_string()),
+        }
+    } else {
+        ret.map(|_| ())
+    }
 }

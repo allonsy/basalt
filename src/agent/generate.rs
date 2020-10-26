@@ -1,5 +1,6 @@
 use super::passphrase;
 use super::private;
+use super::public;
 use super::state;
 
 pub fn generate_sodium_key(st: &mut state::State, key_name: &str) -> Result<(), String> {
@@ -22,4 +23,13 @@ pub fn generate_sodium_key(st: &mut state::State, key_name: &str) -> Result<(), 
     keychain.write_chain();
     sec_key.write_key(key_name);
     Ok(())
+}
+
+pub fn generate_paper_key(st: &mut state::State, key_name: &str) -> Result<String, String> {
+    let (paperkey, pubkey) = public::PaperKey::new(key_name.to_string());
+    let pubkey = public::PublicKeyWrapper::PaperKey(pubkey);
+    let keychain = st.get_chain()?;
+    keychain.add_key(pubkey);
+    keychain.write_chain();
+    Ok(paperkey)
 }

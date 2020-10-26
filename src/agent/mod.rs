@@ -2,6 +2,7 @@ pub mod command;
 pub mod generate;
 pub mod keychain;
 pub mod passphrase;
+pub mod paths;
 pub mod private;
 pub mod public;
 pub mod secret;

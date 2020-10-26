@@ -14,7 +14,7 @@ pub enum Command {
     Quit,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub enum KeyType {
     Sodium,
     PaperKey,
@@ -58,7 +58,7 @@ impl EncryptRequest {
 
 #[derive(Serialize, Deserialize)]
 pub enum Response {
-    AddKey,
+    AddKey(Option<String>),
     Decrypt(Vec<u8>),
     Encrypt,
     Reload,
@@ -69,9 +69,12 @@ pub fn process_command(st: &mut state::State, cmd: Command) -> Result<Response, 
         Command::AddKey(req) => match req.keytype {
             KeyType::Sodium => {
                 generate::generate_sodium_key(st, &req.name)?;
-                Ok(Response::AddKey)
+                Ok(Response::AddKey(None))
             }
-            KeyType::PaperKey => Err("paperkey gen not yet implemented".to_string()),
+            KeyType::PaperKey => {
+                let paperkey = generate::generate_paper_key(st, &req.name)?;
+                Ok(Response::AddKey(Some(paperkey)))
+            }
             KeyType::Yubikey => Err("yubikey gen not yet implemented".to_string()),
         },
         Command::Encrypt(req) => {
