@@ -67,4 +67,10 @@ impl FullPublicKey {
 
         fs::write(path, payload).expect("Unable to write public key");
     }
+
+    pub fn read_key(path: &Path) -> Result<Self, String> {
+        let payload = fs::read(path).map_err(|_| "unable to read public key file".to_string())?;
+
+        serde_json::from_slice(&payload).map_err(|_| "unable to parse public key".to_string())
+    }
 }

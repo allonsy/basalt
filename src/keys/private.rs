@@ -4,6 +4,8 @@ use sodiumoxide::crypto::pwhash;
 use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::secretbox;
 use sodiumoxide::crypto::sign;
+use std::fs;
+use std::path::Path;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct SodiumPrivateKey {
@@ -41,7 +43,26 @@ impl PrivateKey {
 
 enum OnDiskPrivateKey {
     UnencryptedKey(PrivateKey),
-    EncryptedKey(),
+    EncryptedKey(EncryptedPrivateKey),
+}
+
+impl OnDiskPrivateKey {
+    fn is_encrypted(&self) -> bool {
+        match self {
+            OnDiskPrivateKey::EncryptedKey(_) => true,
+            _ => false,
+        }
+    }
+    fn decrypt_key(self, passphrase: &[u8]) -> Result<PrivateKey, String> {
+        match self {
+            OnDiskPrivateKey::UnencryptedKey(key) => Ok(key),
+            OnDiskPrivateKey::EncryptedKey(key) => key.decrypt_key(passphrase),
+        }
+    }
+
+    fn encrypt_key(key: &PrivateKey, passphrase: &[u8]) -> Self {
+        OnDiskPrivateKey::EncryptedKey(EncryptedPrivateKey::encrypt_key(key, passphrase))
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -88,5 +109,17 @@ impl EncryptedPrivateKey {
 
         serde_json::from_slice(&key_payload)
             .map_err(|_| "Unable to parse decrypted key".to_string())
+    }
+
+    pub fn write_key(&self, path: &Path) {
+        let payload = serde_json::to_vec(self).expect("Unable to serialize key");
+
+        fs::write(path, payload).expect("Unable to write public key");
+    }
+
+    pub fn read_key(path: &Path) -> Result<Self, String> {
+        let payload = fs::read(path).map_err(|_| "unable to read private key file".to_string())?;
+
+        serde_json::from_slice(&payload).map_err(|_| "unable to parse public key".to_string())
     }
 }
