@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 use sodiumoxide::crypto::box_;
+use sodiumoxide::crypto::hash as cryptohash;
 use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::sign;
 use std::fs;
@@ -24,6 +25,17 @@ pub struct PublicKey {
 }
 
 impl PublicKey {
+    pub fn new_sodium_key(
+        name: String,
+        enc_key: box_::PublicKey,
+        sign_key: sign::PublicKey,
+    ) -> Self {
+        PublicKey {
+            name,
+            key: PublicKeyType::Sodium(SodiumPublicKey { enc_key, sign_key }),
+        }
+    }
+
     pub fn encrypt(&self, content: &[u8]) -> Vec<u8> {
         match &self.key {
             PublicKeyType::Sodium(key) => sealedbox::seal(content, &key.enc_key),
@@ -33,6 +45,21 @@ impl PublicKey {
     pub fn verify(&self, signature: &sign::Signature, content: &[u8]) -> bool {
         match &self.key {
             PublicKeyType::Sodium(key) => sign::verify_detached(signature, content, &key.sign_key),
+        }
+    }
+
+    pub fn hash(&self) -> Vec<u8> {
+        match &self.key {
+            PublicKeyType::Sodium(key) => {
+                let mut key_vec = Vec::new();
+
+                key_vec.extend_from_slice(&key.enc_key.0);
+                key_vec.extend_from_slice(&key.sign_key.0);
+
+                let mut hash_bytes = Vec::new();
+                hash_bytes.extend_from_slice(&cryptohash::hash(&key_vec).0);
+                hash_bytes
+            }
         }
     }
 }

@@ -1,3 +1,4 @@
+use super::public;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::box_;
 use sodiumoxide::crypto::pwhash;
@@ -25,6 +26,30 @@ pub struct PrivateKey {
 }
 
 impl PrivateKey {
+    pub fn gen_sodium_key(name: String) -> Self {
+        let (_, sec_enc_key) = box_::gen_keypair();
+        let (_, sec_sign_key) = sign::gen_keypair();
+
+        PrivateKey {
+            name,
+            key: PrivateKeyType::Sodium(SodiumPrivateKey {
+                enc_key: sec_enc_key,
+                sign_key: sec_sign_key,
+            }),
+        }
+    }
+
+    pub fn get_public_key(&self) -> public::PublicKey {
+        match &self.key {
+            PrivateKeyType::Sodium(key) => {
+                let pub_enc_key = key.enc_key.public_key();
+                let pub_sign_key = key.sign_key.public_key();
+
+                public::PublicKey::new_sodium_key(self.name.clone(), pub_enc_key, pub_sign_key)
+            }
+        }
+    }
+
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, ()> {
         match &self.key {
             PrivateKeyType::Sodium(key) => {
@@ -39,37 +64,61 @@ impl PrivateKey {
             PrivateKeyType::Sodium(key) => sign::sign(message, &key.sign_key),
         }
     }
+
+    pub fn hash(&self) -> Vec<u8> {
+        let pubkey = self.get_public_key();
+        pubkey.hash()
+    }
 }
 
-enum OnDiskPrivateKey {
+#[derive(Clone, Serialize, Deserialize)]
+pub enum OnDiskPrivateKey {
     UnencryptedKey(PrivateKey),
     EncryptedKey(EncryptedPrivateKey),
 }
 
 impl OnDiskPrivateKey {
-    fn is_encrypted(&self) -> bool {
+    pub fn is_encrypted(&self) -> bool {
         match self {
             OnDiskPrivateKey::EncryptedKey(_) => true,
             _ => false,
         }
     }
-    fn decrypt_key(self, passphrase: &[u8]) -> Result<PrivateKey, String> {
+
+    pub fn wrap_key(priv_key: PrivateKey) -> Self {
+        OnDiskPrivateKey::UnencryptedKey(priv_key)
+    }
+
+    pub fn decrypt_key(self, passphrase: &[u8]) -> Result<PrivateKey, String> {
         match self {
             OnDiskPrivateKey::UnencryptedKey(key) => Ok(key),
             OnDiskPrivateKey::EncryptedKey(key) => key.decrypt_key(passphrase),
         }
     }
 
-    fn encrypt_key(key: &PrivateKey, passphrase: &[u8]) -> Self {
+    pub fn encrypt_key(key: &PrivateKey, passphrase: &[u8]) -> Self {
         OnDiskPrivateKey::EncryptedKey(EncryptedPrivateKey::encrypt_key(key, passphrase))
+    }
+
+    pub fn write_key(&self, path: &Path) {
+        let payload = serde_json::to_vec(self).expect("Unable to serialize key");
+
+        fs::write(path, payload).expect("Unable to write public key");
+    }
+
+    pub fn read_key(path: &Path) -> Result<Self, String> {
+        let payload = fs::read(path).map_err(|_| "unable to read private key file".to_string())?;
+
+        serde_json::from_slice(&payload).map_err(|_| "unable to parse public key".to_string())
     }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct EncryptedPrivateKey {
+pub struct EncryptedPrivateKey {
     nonce: secretbox::Nonce,
     salt: pwhash::Salt,
     ciphertext: Vec<u8>,
+    public_key: public::PublicKey,
 }
 
 impl EncryptedPrivateKey {
@@ -92,6 +141,7 @@ impl EncryptedPrivateKey {
             nonce,
             salt,
             ciphertext,
+            public_key: privkey.get_public_key(),
         }
     }
 
@@ -109,17 +159,5 @@ impl EncryptedPrivateKey {
 
         serde_json::from_slice(&key_payload)
             .map_err(|_| "Unable to parse decrypted key".to_string())
-    }
-
-    pub fn write_key(&self, path: &Path) {
-        let payload = serde_json::to_vec(self).expect("Unable to serialize key");
-
-        fs::write(path, payload).expect("Unable to write public key");
-    }
-
-    pub fn read_key(path: &Path) -> Result<Self, String> {
-        let payload = fs::read(path).map_err(|_| "unable to read private key file".to_string())?;
-
-        serde_json::from_slice(&payload).map_err(|_| "unable to parse public key".to_string())
     }
 }
