@@ -65,7 +65,7 @@ impl PrivateKey {
         }
     }
 
-    pub fn hash(&self) -> Vec<u8> {
+    pub fn hash(&self) -> String {
         let pubkey = self.get_public_key();
         pubkey.hash()
     }
@@ -78,6 +78,13 @@ pub enum OnDiskPrivateKey {
 }
 
 impl OnDiskPrivateKey {
+    pub fn hash(&self) -> String {
+        match self {
+            OnDiskPrivateKey::UnencryptedKey(key) => key.hash(),
+            OnDiskPrivateKey::EncryptedKey(key) => key.public_key.hash(),
+        }
+    }
+
     pub fn is_encrypted(&self) -> bool {
         match self {
             OnDiskPrivateKey::EncryptedKey(_) => true,

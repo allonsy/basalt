@@ -1,3 +1,4 @@
+use crate::util;
 use serde::Deserialize;
 use serde::Serialize;
 use sodiumoxide::crypto::box_;
@@ -48,7 +49,7 @@ impl PublicKey {
         }
     }
 
-    pub fn hash(&self) -> Vec<u8> {
+    pub fn hash(&self) -> String {
         match &self.key {
             PublicKeyType::Sodium(key) => {
                 let mut key_vec = Vec::new();
@@ -58,7 +59,7 @@ impl PublicKey {
 
                 let mut hash_bytes = Vec::new();
                 hash_bytes.extend_from_slice(&cryptohash::hash(&key_vec).0);
-                hash_bytes
+                util::hexify(&hash_bytes)
             }
         }
     }

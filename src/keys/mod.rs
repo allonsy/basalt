@@ -1,6 +1,6 @@
-mod keyring;
-mod private;
-mod public;
+pub mod keyring;
+pub mod private;
+pub mod public;
 use crate::config;
 use crate::menu;
 
