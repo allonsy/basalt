@@ -65,6 +65,23 @@ impl PrivateKey {
         }
     }
 
+    pub fn sign_key(&self, public_key: &mut public::FullPublicKey) {
+        let this_hash = self.hash();
+
+        for sig in &public_key.signatures {
+            if sig.key_hash == this_hash {
+                return;
+            }
+        }
+
+        let signature_payload = public_key.key.get_sign_payload();
+        let signature = self.sign(&signature_payload);
+
+        public_key
+            .signatures
+            .push(public::KeySignature::new(this_hash, signature));
+    }
+
     pub fn hash(&self) -> String {
         let pubkey = self.get_public_key();
         pubkey.hash()
@@ -78,11 +95,15 @@ pub enum OnDiskPrivateKey {
 }
 
 impl OnDiskPrivateKey {
-    pub fn hash(&self) -> String {
+    pub fn get_public_key(&self) -> public::PublicKey {
         match self {
-            OnDiskPrivateKey::UnencryptedKey(key) => key.hash(),
-            OnDiskPrivateKey::EncryptedKey(key) => key.public_key.hash(),
+            OnDiskPrivateKey::UnencryptedKey(key) => key.get_public_key(),
+            OnDiskPrivateKey::EncryptedKey(key) => key.public_key.clone(),
         }
+    }
+
+    pub fn hash(&self) -> String {
+        self.get_public_key().hash()
     }
 
     pub fn is_encrypted(&self) -> bool {

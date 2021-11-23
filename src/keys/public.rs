@@ -1,3 +1,4 @@
+use crate::config;
 use crate::util;
 use serde::Deserialize;
 use serde::Serialize;
@@ -7,6 +8,7 @@ use sodiumoxide::crypto::sealedbox;
 use sodiumoxide::crypto::sign;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct SodiumPublicKey {
@@ -17,6 +19,19 @@ struct SodiumPublicKey {
 #[derive(Clone, Serialize, Deserialize)]
 enum PublicKeyType {
     Sodium(SodiumPublicKey),
+}
+
+impl PublicKeyType {
+    fn get_sign_payload(&self) -> Vec<u8> {
+        match self {
+            PublicKeyType::Sodium(key) => {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(&key.enc_key.0);
+                bytes.extend_from_slice(&key.sign_key.0);
+                bytes
+            }
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -43,9 +58,21 @@ impl PublicKey {
         }
     }
 
-    pub fn verify(&self, signature: &sign::Signature, content: &[u8]) -> bool {
+    pub fn verify(&self, signature: &[u8], content: &[u8]) -> bool {
+        let mut sodium_signature: [u8; sign::SIGNATUREBYTES] = [0; sign::SIGNATUREBYTES];
+        if signature.len() != sign::SIGNATUREBYTES {
+            return false;
+        }
+
+        for (idx, val) in signature.iter().enumerate() {
+            sodium_signature[idx] = *val;
+        }
+
+        let sodium_signature = sign::Signature::new(sodium_signature);
         match &self.key {
-            PublicKeyType::Sodium(key) => sign::verify_detached(signature, content, &key.sign_key),
+            PublicKeyType::Sodium(key) => {
+                sign::verify_detached(&sodium_signature, content, &key.sign_key)
+            }
         }
     }
 
@@ -63,23 +90,28 @@ impl PublicKey {
             }
         }
     }
-}
 
-#[derive(Clone, Serialize, Deserialize)]
-pub enum SignatureKey {
-    Sodium(box_::PublicKey),
+    pub fn get_sign_payload(&self) -> Vec<u8> {
+        self.key.get_sign_payload()
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct KeySignature {
-    key: SignatureKey,
-    payload: Vec<u8>,
+    pub key_hash: String,
+    pub payload: Vec<u8>,
+}
+
+impl KeySignature {
+    pub fn new(key_hash: String, payload: Vec<u8>) -> Self {
+        KeySignature { key_hash, payload }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FullPublicKey {
-    key: PublicKey,
-    signatures: Vec<KeySignature>,
+    pub key: PublicKey,
+    pub signatures: Vec<KeySignature>,
 }
 
 impl FullPublicKey {
@@ -90,8 +122,13 @@ impl FullPublicKey {
         }
     }
 
-    pub fn write_key(&self, path: &Path) {
+    pub fn get_key_path(&self) -> PathBuf {
+        config::get_public_keys_dir().join(format!("{}.pub", self.key.name))
+    }
+
+    pub fn write_key(&self) {
         let payload = serde_json::to_vec(self).expect("Unable to serialize key");
+        let path = self.get_key_path();
 
         fs::write(path, payload).expect("Unable to write public key");
     }
