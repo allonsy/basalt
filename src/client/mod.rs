@@ -32,7 +32,18 @@ pub fn get_device_keys() -> Vec<OnDiskPrivateKey> {
     priv_keys
 }
 
-pub fn decrypt(keyhash: &str, payload: &[u8]) -> Result<Vec<u8>, ()> {
+pub fn decrypt(keys: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, ()> {
+    for (hash, payload) in keys {
+        let plaintext = decrypt_key(&hash, &payload);
+        if plaintext.is_ok() {
+            return plaintext;
+        }
+    }
+
+    Err(())
+}
+
+pub fn decrypt_key(keyhash: &str, payload: &[u8]) -> Result<Vec<u8>, ()> {
     let priv_key = get_priv_key_by_hash(keyhash)?;
 
     match priv_key {

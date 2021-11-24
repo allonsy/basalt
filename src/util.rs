@@ -31,6 +31,11 @@ pub fn unhexify(hex_string: &str) -> Option<Vec<u8>> {
     Some(bytes)
 }
 
+pub fn exit(message: &str, status: i32) -> ! {
+    eprintln!("{}", message);
+    std::process::exit(status);
+}
+
 #[cfg(test)]
 mod tests {
 

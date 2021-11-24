@@ -36,7 +36,7 @@ impl PublicKeyType {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PublicKey {
-    name: String,
+    pub name: String,
     key: PublicKeyType,
 }
 

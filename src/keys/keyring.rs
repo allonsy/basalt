@@ -100,6 +100,25 @@ impl KeyChain {
             unvalidated_keys: untrusted_keys,
         }
     }
+
+    pub fn get_public_key_for_name(&self, name: &str) -> Option<public::PublicKey> {
+        for key in &self.validated_keys {
+            if key.key.name == name {
+                return Some(key.key.clone());
+            }
+        }
+        None
+    }
+
+    pub fn get_public_key_for_hash(&self, hash: &str) -> Option<public::PublicKey> {
+        for key in &self.validated_keys {
+            if key.key.hash() == hash {
+                return Some(key.key.clone());
+            }
+        }
+
+        None
+    }
 }
 
 pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKey> {

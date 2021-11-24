@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+pub const KEY_ID_FILE_NAME: &'static str = ".key_ids";
+
 pub fn get_app_dir() -> PathBuf {
     PathBuf::from("/home/alecsnyder/.basalt")
 }
