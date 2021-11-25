@@ -23,3 +23,8 @@ pub fn get_public_keys_dir() -> PathBuf {
     store_dir.push(".keys");
     store_dir
 }
+
+pub fn get_agent_socket_path() -> PathBuf {
+    let app_dir = get_app_dir();
+    app_dir.join("agent.socket")
+}
