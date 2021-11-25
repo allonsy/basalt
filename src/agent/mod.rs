@@ -22,6 +22,17 @@ enum Message {
     EndSession,
 }
 
+#[derive(Serialize, Deserialize)]
+enum MessageResponsePayload {
+    Sign,
+    Decrypt,
+    Quit,
+    StartSession,
+    EndSession,
+}
+
+type MessageResponse = Result<MessageResponsePayload, String>;
+
 struct SharedState {}
 
 impl SharedState {
