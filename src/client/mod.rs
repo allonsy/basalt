@@ -1,6 +1,32 @@
+use crate::agent;
 use crate::config;
 use crate::keys::private::OnDiskPrivateKey;
 use glob::glob;
+use std::os::unix::net::UnixStream;
+
+pub struct Client {
+    stream: UnixStream,
+    session_key: Option<String>,
+}
+
+impl Client {
+    pub fn new() -> Result<Client, String> {
+        agent::start_agent();
+
+        let connection = UnixStream::connect(config::get_agent_socket_path());
+        if connection.is_err() {
+            return Err(format!(
+                "Unable to connect to agent: {}",
+                connection.err().unwrap()
+            ));
+        }
+
+        Ok(Client {
+            stream: connection.unwrap(),
+            session_key: None,
+        })
+    }
+}
 
 pub fn get_device_keys() -> Vec<OnDiskPrivateKey> {
     let mut priv_key_dir = config::get_private_key_dir();

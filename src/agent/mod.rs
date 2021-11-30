@@ -1,21 +1,27 @@
 use crate::config;
+use crate::keys::private::OnDiskPrivateKey;
+use glob::glob;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use sodiumoxide::crypto::kx::SessionKey;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
+use std::ops::Index;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
+mod handler;
+
 #[derive(Serialize, Deserialize)]
 enum Message {
-    Sign,
+    Sign(Vec<u8>),
     Decrypt,
     Quit,
     StartSession,
@@ -33,11 +39,20 @@ enum MessageResponsePayload {
 
 type MessageResponse = Result<MessageResponsePayload, String>;
 
-struct SharedState {}
+struct SharedState {
+    keys: HashMap<String, OnDiskPrivateKey>,
+}
 
 impl SharedState {
     fn new() -> Self {
-        SharedState {}
+        let device_keys = get_device_keys();
+
+        let key_map = HashMap::new();
+
+        for key in device_keys {
+            key_map.insert(key.hash(), key);
+        }
+        SharedState { keys: key_map }
     }
 }
 struct SessionState {
@@ -60,11 +75,32 @@ impl Clone for SessionState {
     }
 }
 
-fn start_agent() {
-    let listener = UnixListener::bind(config::get_agent_socket_path());
+pub fn start_agent() {
+    let socket_path = config::get_agent_socket_path();
 
-    if (listener.is_err()) {
+    if socket_path.exists() {
         return;
+    }
+
+    let listener = UnixListener::bind(socket_path);
+
+    if listener.is_err() {
+        return;
+    }
+
+    let fork_res = fork::daemon(true, false);
+
+    if fork_res.is_err() {
+        return;
+    }
+
+    let fork_res = fork_res.unwrap();
+
+    match fork_res {
+        fork::Fork::Parent(_) => {
+            return;
+        }
+        _ => {}
     }
 
     let state = SessionState::new();
@@ -100,7 +136,7 @@ fn handle_stream(stream: UnixStream, state: SessionState) {
     handle_message(writer, message.unwrap());
 }
 
-fn read_message<V>(reader: &mut BufReader<UnixStream>) -> Result<V, ()>
+pub fn read_message<V>(reader: &mut BufReader<UnixStream>) -> Result<V, ()>
 where
     V: DeserializeOwned,
 {
@@ -134,7 +170,7 @@ where
     Ok(parsed_message.unwrap())
 }
 
-fn write_message<V>(writer: &mut UnixStream, message: V) -> Result<(), ()>
+pub fn write_message<V>(writer: &mut UnixStream, message: V) -> Result<(), ()>
 where
     V: Serialize,
 {
@@ -151,6 +187,36 @@ where
     }
 
     Ok(())
+}
+
+pub fn get_device_keys() -> Vec<OnDiskPrivateKey> {
+    let mut priv_key_dir = config::get_private_key_dir();
+    priv_key_dir.push("*.priv");
+
+    let mut priv_keys = Vec::new();
+
+    let glob_matches = glob(priv_key_dir.to_str().unwrap());
+    if let Err(e) = glob_matches {
+        eprintln!("Unable to read private key directory: {}", e);
+        return priv_keys;
+    }
+
+    let glob_matches = glob_matches.unwrap();
+
+    for entry in glob_matches {
+        match entry {
+            Ok(file_path) => {
+                let parsed_priv_key = OnDiskPrivateKey::read_key(&file_path);
+                match parsed_priv_key {
+                    Ok(key) => priv_keys.push(key),
+                    Err(e) => eprintln!("Unable to read private key: {}", e),
+                };
+            }
+            Err(e) => eprintln!("Unable to read private key: {}", e),
+        }
+    }
+
+    priv_keys
 }
 
 fn handle_message(writer: UnixStream, message: Message) {}
