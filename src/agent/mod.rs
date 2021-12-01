@@ -1,5 +1,6 @@
 use crate::config;
 use crate::keys::private::OnDiskPrivateKey;
+use crate::keys::private::PrivateKey;
 use glob::glob;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -20,49 +21,63 @@ use std::thread;
 mod handler;
 
 #[derive(Serialize, Deserialize)]
-enum Message {
+pub enum Message {
     Sign(Vec<u8>),
     Decrypt,
     Quit,
-    StartSession,
     EndSession,
 }
 
 #[derive(Serialize, Deserialize)]
-enum MessageResponsePayload {
-    Sign,
+pub enum MessageResponsePayload {
+    Sign(String, Vec<u8>),
     Decrypt,
     Quit,
-    StartSession,
     EndSession,
 }
 
-type MessageResponse = Result<MessageResponsePayload, String>;
+pub type MessageResponse = Result<MessageResponsePayload, String>;
 
 struct SharedState {
-    keys: HashMap<String, OnDiskPrivateKey>,
+    locked_keys: HashMap<String, OnDiskPrivateKey>,
+    unlocked_keys: HashMap<String, PrivateKey>,
 }
 
 impl SharedState {
     fn new() -> Self {
         let device_keys = get_device_keys();
 
-        let key_map = HashMap::new();
+        let mut key_map = HashMap::new();
+        let mut unlocked_map = HashMap::new();
 
         for key in device_keys {
-            key_map.insert(key.hash(), key);
+            if key.is_encrypted() {
+                key_map.insert(key.hash(), key);
+            } else {
+                let unlocked_key = key.clone().decrypt_key(&Vec::new());
+                if unlocked_key.is_err() {
+                    key_map.insert(key.hash(), key);
+                } else {
+                    unlocked_map.insert(key.hash(), unlocked_key.unwrap());
+                }
+            }
         }
-        SharedState { keys: key_map }
+        SharedState {
+            locked_keys: key_map,
+            unlocked_keys: unlocked_map,
+        }
     }
 }
 struct SessionState {
     shared_state: Arc<Mutex<SharedState>>,
+    unlocked_keys: HashMap<String, PrivateKey>,
 }
 
 impl SessionState {
     fn new() -> Self {
         SessionState {
             shared_state: Arc::new(Mutex::new(SharedState::new())),
+            unlocked_keys: HashMap::new(),
         }
     }
 }
@@ -71,6 +86,7 @@ impl Clone for SessionState {
     fn clone(&self) -> SessionState {
         SessionState {
             shared_state: self.shared_state.clone(),
+            unlocked_keys: self.unlocked_keys.clone(),
         }
     }
 }
@@ -117,23 +133,24 @@ pub fn start_agent() {
     }
 }
 
-fn handle_stream(stream: UnixStream, state: SessionState) {
+fn handle_stream(stream: UnixStream, mut state: SessionState) {
     let writer = stream.try_clone();
     if writer.is_err() {
         log("Unable to clone stream");
         return;
     }
 
-    let writer = writer.unwrap();
+    let mut writer = writer.unwrap();
     let mut reader = BufReader::new(stream);
 
-    let message: Result<Message, ()> = read_message(&mut reader);
-    if message.is_err() {
-        log("Unable to parsed message");
-        return;
-    }
+    loop {
+        let message: Result<Message, ()> = read_message(&mut reader);
+        if message.is_err() {
+            return;
+        }
 
-    handle_message(writer, message.unwrap());
+        handle_message(&mut state, &mut writer, message.unwrap());
+    }
 }
 
 pub fn read_message<V>(reader: &mut BufReader<UnixStream>) -> Result<V, ()>
@@ -145,6 +162,10 @@ where
     let read_res = reader.read_line(&mut &mut msg_len_str);
     if read_res.is_err() {
         log("unable to read from stream");
+        return Err(());
+    }
+
+    if read_res.unwrap() == 0 {
         return Err(());
     }
 
@@ -219,7 +240,11 @@ pub fn get_device_keys() -> Vec<OnDiskPrivateKey> {
     priv_keys
 }
 
-fn handle_message(writer: UnixStream, message: Message) {}
+fn handle_message(state: &mut SessionState, writer: &mut UnixStream, message: Message) {
+    let resp = handler::handle_message(state, message);
+
+    write_message(writer, resp);
+}
 
 fn get_buffer(size: usize) -> Vec<u8> {
     let mut buf = Vec::new();
