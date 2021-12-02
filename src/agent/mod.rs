@@ -23,15 +23,24 @@ mod handler;
 #[derive(Serialize, Deserialize)]
 pub enum Message {
     Sign(Vec<u8>),
-    Decrypt,
+    Decrypt(Vec<(String, Vec<u8>)>),
     Quit,
     EndSession,
+}
+
+impl Message {
+    fn is_end_session(&self) -> bool {
+        match self {
+            Message::EndSession => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum MessageResponsePayload {
     Sign(String, Vec<u8>),
-    Decrypt,
+    Decrypt(Vec<u8>),
     Quit,
     EndSession,
 }
@@ -149,7 +158,13 @@ fn handle_stream(stream: UnixStream, mut state: SessionState) {
             return;
         }
 
-        handle_message(&mut state, &mut writer, message.unwrap());
+        let message = message.unwrap();
+
+        if message.is_end_session() {
+            break;
+        }
+
+        handle_message(&mut state, &mut writer, message);
     }
 }
 

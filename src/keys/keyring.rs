@@ -1,4 +1,5 @@
 use super::public;
+use crate::agent;
 use crate::client;
 use crate::config;
 use crate::menu;
@@ -62,7 +63,7 @@ pub struct KeyChain {
 impl KeyChain {
     pub fn validate_keychain() -> Self {
         let public_keys = get_public_keys();
-        let device_keys = client::get_device_keys();
+        let device_keys = agent::get_device_keys();
 
         let mut trusted_keys = HashMap::new();
 
@@ -123,6 +124,13 @@ impl KeyChain {
 
 pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKey> {
     let mut untrusted_keys = Vec::new();
+    let client = client::Client::new();
+    if client.is_err() {
+        eprintln!("WARNING: UNABLE TO CONNECT TO CLIENT");
+        return untrusted_keys;
+    }
+
+    let mut client = client.unwrap();
 
     for mut key in pubkeys {
         let prompt = format!(
@@ -132,12 +140,12 @@ pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKe
         let should_sign = menu::prompt_yes_no(prompt, Some(true));
 
         if should_sign {
-            let sign_res = client::sign(&key.key.get_sign_payload());
+            let sign_res = client.sign_message(key.key.get_sign_payload());
             if sign_res.is_err() {
                 eprintln!("Unable to sign key");
                 untrusted_keys.push(key);
             } else {
-                let (payload, keyhash) = sign_res.unwrap();
+                let (keyhash, payload) = sign_res.unwrap();
                 key.signatures
                     .push(public::KeySignature::new(keyhash, payload));
                 key.write_key();

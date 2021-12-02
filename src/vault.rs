@@ -62,8 +62,8 @@ impl Vault {
             .iter()
             .map(|k| (k.keyhash.clone(), k.payload.clone()))
             .collect();
-
-        let decrypted_key = client::decrypt(formatted_keys);
+        let mut client = client::Client::new().map_err(|_| ())?;
+        let decrypted_key = client.decrypt_message(formatted_keys);
         if decrypted_key.is_err() {
             eprintln!("Unable to decrypt secret keys");
             return Err(());
