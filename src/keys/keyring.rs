@@ -56,7 +56,7 @@ fn is_trusted(
 }
 
 pub struct KeyChain {
-    validated_keys: Vec<public::FullPublicKey>,
+    pub validated_keys: Vec<public::FullPublicKey>,
     unvalidated_keys: Vec<public::FullPublicKey>,
 }
 

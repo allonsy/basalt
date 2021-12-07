@@ -11,25 +11,31 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
-#[derive(Serialize, Deserialize)]
-struct Vault {
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Vault {
     ciphertext: Vec<u8>,
     nonce: secretbox::Nonce,
-    keys: Vec<VaultKey>,
+    pub keys: Vec<VaultKey>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct VaultKey {
-    keyhash: String,
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VaultKey {
+    pub keyhash: String,
     payload: Vec<u8>,
 }
 
 impl Vault {
-    pub fn create_vault(path: &Path, payload: Vec<u8>) {
+    pub fn create_vault(path: &Path, payload: &[u8]) {
+        let keys = get_keys_for_path(path);
+        let vault = Vault::seal_vault(payload, keys);
+
+        vault.write_vault(path);
+    }
+
+    pub fn seal_vault(payload: &[u8], keys: Vec<PublicKey>) -> Vault {
         let nonce = secretbox::gen_nonce();
         let sym_key = secretbox::gen_key();
 
-        let keys = get_keys_for_path(path);
         let mut vault_keys = Vec::new();
 
         for key in keys {
@@ -41,13 +47,11 @@ impl Vault {
 
         let ciphertext = secretbox::seal(&payload, &nonce, &sym_key);
 
-        let vault = Vault {
+        Vault {
             ciphertext,
             nonce,
             keys: vault_keys,
-        };
-
-        vault.write_vault(path);
+        }
     }
 
     pub fn open_vault(path: &Path) -> Result<Vec<u8>, ()> {
@@ -97,12 +101,10 @@ impl Vault {
         Some(parsed_vault.unwrap())
     }
 
-    pub fn write_vault(&self, path: &Path) {
-        let mut store_dir = config::get_store_dir().join(path);
-
-        let vault_file = fs::File::create(&store_dir);
+    pub fn write_vault_raw(&self, path: &Path) {
+        let vault_file = fs::File::create(&path);
         if vault_file.is_err() {
-            eprintln!("Unable to write to file: {:?}", store_dir);
+            eprintln!("Unable to write to file: {:?}", path);
             return;
         }
         let vault_file = vault_file.unwrap();
@@ -112,6 +114,12 @@ impl Vault {
         if serialization_result.is_err() {
             eprintln!("Unable to serialize vault");
         }
+    }
+
+    pub fn write_vault(&self, path: &Path) {
+        let mut store_dir = config::get_store_dir().join(path);
+
+        self.write_vault_raw(&store_dir);
     }
 }
 
