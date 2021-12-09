@@ -1,6 +1,7 @@
 use super::public;
 use crate::agent;
 use crate::client;
+use crate::client::Client;
 use crate::config;
 use crate::menu;
 use glob::glob;
@@ -96,6 +97,13 @@ impl KeyChain {
             }
         }
 
+        let client = Client::new();
+
+        if client.is_ok() {
+            let mut client = client.unwrap();
+            sign_key(&mut untrusted_keys, &mut client);
+        }
+
         KeyChain {
             validated_keys: trusted_keys.into_values().collect(),
             unvalidated_keys: untrusted_keys,
@@ -122,15 +130,11 @@ impl KeyChain {
     }
 }
 
-pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKey> {
+pub fn sign_key(
+    pubkeys: &mut Vec<public::FullPublicKey>,
+    client: &mut Client,
+) -> Vec<public::FullPublicKey> {
     let mut untrusted_keys = Vec::new();
-    let client = client::Client::new();
-    if client.is_err() {
-        eprintln!("WARNING: UNABLE TO CONNECT TO CLIENT");
-        return untrusted_keys;
-    }
-
-    let mut client = client.unwrap();
 
     for mut key in pubkeys {
         let prompt = format!(
@@ -143,7 +147,7 @@ pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKe
             let sign_res = client.sign_message(key.key.get_sign_payload());
             if sign_res.is_err() {
                 eprintln!("Unable to sign key");
-                untrusted_keys.push(key);
+                untrusted_keys.push(key.clone());
             } else {
                 let (keyhash, payload) = sign_res.unwrap();
                 key.signatures
@@ -151,7 +155,7 @@ pub fn sign_key(pubkeys: Vec<public::FullPublicKey>) -> Vec<public::FullPublicKe
                 key.write_key();
             }
         } else {
-            untrusted_keys.push(key);
+            untrusted_keys.push(key.clone());
         }
     }
 

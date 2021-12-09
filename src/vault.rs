@@ -20,8 +20,21 @@ pub struct Vault {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct VaultKey {
-    pub keyhash: String,
+    keyhash: String,
     payload: Vec<u8>,
+}
+
+impl VaultKey {
+    pub fn new(hash: String, payload: Vec<u8>) -> Self {
+        VaultKey {
+            keyhash: hash,
+            payload,
+        }
+    }
+
+    pub fn get_hash(&self) -> String {
+        self.keyhash.clone()
+    }
 }
 
 impl Vault {
@@ -54,14 +67,18 @@ impl Vault {
         }
     }
 
-    pub fn open_vault(path: &Path) -> Result<Vec<u8>, ()> {
+    pub fn open_vault_path(path: &Path) -> Result<Vec<u8>, ()> {
         let vault = Vault::read_vault(path);
         if vault.is_none() {
             return Err(());
         }
         let vault = vault.unwrap();
 
-        let formatted_keys = vault
+        vault.open_vault()
+    }
+
+    pub fn open_vault_secret(&self) -> Result<secretbox::Key, ()> {
+        let formatted_keys = self
             .keys
             .iter()
             .map(|k| (k.keyhash.clone(), k.payload.clone()))
@@ -78,9 +95,12 @@ impl Vault {
             eprintln!("Invalid key");
             return Err(());
         }
-        let parsed_key = parsed_key.unwrap();
+        Ok(parsed_key.unwrap())
+    }
 
-        secretbox::open(&vault.ciphertext, &vault.nonce, &parsed_key)
+    pub fn open_vault(&self) -> Result<Vec<u8>, ()> {
+        let secret_key = self.open_vault_secret()?;
+        secretbox::open(&self.ciphertext, &self.nonce, &secret_key)
     }
 
     pub fn read_vault(path: &Path) -> Option<Self> {
