@@ -1,3 +1,5 @@
+use crate::config;
+
 use super::public;
 use serde::{Deserialize, Serialize};
 use sodiumoxide::crypto::box_;
@@ -7,6 +9,7 @@ use sodiumoxide::crypto::secretbox;
 use sodiumoxide::crypto::sign;
 use std::fs;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct SodiumPrivateKey {
@@ -128,7 +131,19 @@ impl OnDiskPrivateKey {
         OnDiskPrivateKey::EncryptedKey(EncryptedPrivateKey::encrypt_key(key, passphrase))
     }
 
-    pub fn write_key(&self, path: &Path) {
+    pub fn get_key_path(&self) -> PathBuf {
+        let base_path = config::get_private_key_dir();
+
+        match &self {
+            &OnDiskPrivateKey::EncryptedKey(k) => {
+                base_path.join(format!("{}.priv", k.public_key.name))
+            }
+            &OnDiskPrivateKey::UnencryptedKey(k) => base_path.join(format!("{}.priv", k.name)),
+        }
+    }
+
+    pub fn write_key(&self) {
+        let path = self.get_key_path();
         let payload = serde_json::to_vec(self).expect("Unable to serialize key");
 
         fs::write(path, payload).expect("Unable to write public key");

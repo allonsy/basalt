@@ -136,7 +136,7 @@ pub fn sign_key(
 ) -> Vec<public::FullPublicKey> {
     let mut untrusted_keys = Vec::new();
 
-    for mut key in pubkeys {
+    for key in pubkeys {
         let prompt = format!(
             "The following key is untrusted: {}, do you wish to sign it?",
             key.key.hash()

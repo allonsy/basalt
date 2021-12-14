@@ -1,5 +1,6 @@
 mod agent;
 mod client;
+mod commands;
 mod config;
 mod keys;
 mod menu;
@@ -8,5 +9,6 @@ mod util;
 mod vault;
 
 fn main() {
-    keys::gen_sodium_key();
+    let app = commands::Application::new();
+    app.run_app();
 }
