@@ -1,4 +1,5 @@
 use crate::client;
+use crate::client::Client;
 use crate::config;
 use crate::keys::keyring;
 use crate::keys::public::PublicKey;
@@ -38,8 +39,8 @@ impl VaultKey {
 }
 
 impl Vault {
-    pub fn create_vault(path: &Path, payload: &[u8]) {
-        let keys = get_keys_for_path(path);
+    pub fn create_vault(client: &mut Client, path: &Path, payload: &[u8]) {
+        let keys = get_keys_for_path(client, path);
         let vault = Vault::seal_vault(payload, keys);
 
         vault.write_vault(path);
@@ -143,7 +144,7 @@ impl Vault {
     }
 }
 
-fn get_keys_for_path(path: &Path) -> Vec<PublicKey> {
+fn get_keys_for_path(client: &mut Client, path: &Path) -> Vec<PublicKey> {
     let mut keys = Vec::new();
     let path = path.canonicalize();
     if path.is_err() {
@@ -154,7 +155,7 @@ fn get_keys_for_path(path: &Path) -> Vec<PublicKey> {
         return keys;
     }
 
-    let keychain = keyring::KeyChain::validate_keychain();
+    let keychain = keyring::KeyChain::validate_keychain(client);
 
     let store_dir = config::get_store_dir().canonicalize();
     if store_dir.is_err() {

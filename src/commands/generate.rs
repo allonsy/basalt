@@ -33,14 +33,13 @@ fn generate_key() {
 
     let disk_private_key = keys::private::OnDiskPrivateKey::wrap_key(private_key);
     let disk_pub_key = keys::public::FullPublicKey::new(&pub_key);
-
-    let keychain = super::get_keyring();
     let mut client = super::get_client();
+    let keychain = super::get_keyring(&mut client);
 
     if !keychain.validated_keys.is_empty() {
         keyring::sign_key(&mut vec![disk_pub_key.clone()], &mut client);
+    } else {
+        disk_pub_key.write_key();
+        disk_private_key.write_key();
     }
-
-    disk_pub_key.write_key();
-    disk_private_key.write_key();
 }

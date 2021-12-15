@@ -5,13 +5,11 @@ use glob::glob;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
-use sodiumoxide::crypto::kx::SessionKey;
 use std::collections::HashMap;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
-use std::ops::Index;
 use std::os::unix::net::UnixListener;
 use std::os::unix::net::UnixStream;
 use std::sync::Arc;
@@ -37,7 +35,7 @@ impl Message {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum MessageResponsePayload {
     Sign(String, Vec<u8>),
     Decrypt(Vec<u8>),
@@ -161,6 +159,8 @@ fn handle_stream(stream: UnixStream, mut state: SessionState) {
         let message = message.unwrap();
 
         if message.is_end_session() {
+            let resp: MessageResponse = Ok(MessageResponsePayload::EndSession);
+            write_message(&mut writer, resp);
             break;
         }
 
@@ -174,7 +174,7 @@ where
 {
     let mut msg_len_str = String::new();
 
-    let read_res = reader.read_line(&mut &mut msg_len_str);
+    let read_res = reader.read_line(&mut msg_len_str);
     if read_res.is_err() {
         log("unable to read from stream");
         return Err(());
@@ -200,6 +200,7 @@ where
     }
     let parsed_message = serde_json::from_slice(&message_bytes);
     if parsed_message.is_err() {
+        log("Unable to deserialize json");
         return Err(());
     }
 
@@ -216,8 +217,10 @@ where
         return Err(());
     }
 
-    let message_bytes = message_bytes.unwrap();
-    let write_res = writer.write_all(&message_bytes);
+    let mut message_bytes = message_bytes.unwrap();
+    let mut message_prefix = format!("{}\n", message_bytes.len()).into_bytes();
+    message_prefix.append(&mut message_bytes);
+    let write_res = writer.write_all(&message_prefix);
     if write_res.is_err() {
         return Err(());
     }
@@ -269,4 +272,6 @@ fn get_buffer(size: usize) -> Vec<u8> {
     buf
 }
 
-fn log(msg: &str) {}
+fn log(msg: &str) {
+    println!("log: {}", msg);
+}

@@ -62,7 +62,7 @@ pub struct KeyChain {
 }
 
 impl KeyChain {
-    pub fn validate_keychain() -> Self {
+    pub fn validate_keychain(client: &mut Client) -> Self {
         let public_keys = get_public_keys();
         let device_keys = agent::get_device_keys();
 
@@ -97,12 +97,7 @@ impl KeyChain {
             }
         }
 
-        let client = Client::new();
-
-        if client.is_ok() {
-            let mut client = client.unwrap();
-            sign_key(&mut untrusted_keys, &mut client);
-        }
+        sign_key(&mut untrusted_keys, client);
 
         KeyChain {
             validated_keys: trusted_keys.into_values().collect(),
@@ -146,7 +141,7 @@ pub fn sign_key(
         if should_sign {
             let sign_res = client.sign_message(key.key.get_sign_payload());
             if sign_res.is_err() {
-                eprintln!("Unable to sign key");
+                eprintln!("Unable to sign key: {}", sign_res.err().unwrap());
                 untrusted_keys.push(key.clone());
             } else {
                 let (keyhash, payload) = sign_res.unwrap();

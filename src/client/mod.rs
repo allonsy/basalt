@@ -35,7 +35,10 @@ impl Client {
         agent::write_message(&mut self.writer, msg)
             .map_err(|_| "Unable to write to stream".to_string())?;
 
-        agent::read_message(&mut self.reader).map_err(|_| "Unable to read from stream".to_string())
+        let resp = agent::read_message(&mut self.reader)
+            .map_err(|()| "Unable to read from stream".to_string())?;
+
+        resp
     }
 
     pub fn sign_message(&mut self, payload: Vec<u8>) -> Result<(String, Vec<u8>), String> {

@@ -2,7 +2,7 @@ use clap::{crate_authors, crate_description, crate_version, App, ArgMatches};
 use std::collections::HashMap;
 
 use crate::{
-    client,
+    client::{self, Client},
     keys::keyring::{self, KeyChain},
     util,
 };
@@ -51,8 +51,8 @@ impl Application {
     }
 }
 
-fn get_keyring() -> keyring::KeyChain {
-    KeyChain::validate_keychain()
+fn get_keyring(client: &mut Client) -> keyring::KeyChain {
+    KeyChain::validate_keychain(client)
 }
 
 fn get_client() -> client::Client {

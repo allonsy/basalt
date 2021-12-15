@@ -1,4 +1,5 @@
 use crate::client;
+use crate::client::Client;
 use crate::config;
 use crate::keys::keyring;
 use crate::keys::public;
@@ -11,8 +12,8 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::path::Path;
 
-pub fn validate() -> Result<(), String> {
-    let keychain = keyring::KeyChain::validate_keychain();
+pub fn validate(client: &mut Client) -> Result<(), String> {
+    let keychain = keyring::KeyChain::validate_keychain(client);
 
     let base_keys = keychain
         .validated_keys
