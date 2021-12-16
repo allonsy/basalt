@@ -41,7 +41,6 @@ impl VaultKey {
 impl Vault {
     pub fn create_vault(keychain: &keyring::KeyChain, path: &Path, payload: &[u8]) {
         let keys = get_keys_for_path(keychain, path);
-        println!("priming for {} keys", keys.len());
         let vault = Vault::seal_vault(payload, keys);
 
         vault.write_vault(path);
@@ -139,7 +138,7 @@ impl Vault {
     }
 
     pub fn write_vault(&self, path: &Path) {
-        let mut store_dir = config::get_store_dir().join(path);
+        let store_dir = config::get_store_dir().join(path);
 
         self.write_vault_raw(&store_dir);
     }
