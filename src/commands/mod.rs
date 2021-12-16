@@ -8,6 +8,7 @@ use crate::{
 };
 
 mod generate;
+mod insert;
 
 trait Subcommand {
     fn get_app(&self) -> App<'static, 'static>;
@@ -20,10 +21,13 @@ pub struct Application {
 impl Application {
     pub fn new() -> Application {
         let mut apps: HashMap<String, Box<dyn Subcommand>> = HashMap::new();
+
         apps.insert(
             "generate".to_string(),
             Box::new(generate::GenerateCommand::new()),
         );
+
+        apps.insert("insert".to_string(), Box::new(insert::InsertCommand::new()));
 
         Application { apps: apps }
     }
@@ -35,7 +39,7 @@ impl Application {
             .setting(clap::AppSettings::ArgRequiredElseHelp)
             .about(crate_description!());
 
-        for (cmd_name, cmd) in self.apps.iter() {
+        for (_, cmd) in self.apps.iter() {
             base_app = base_app.subcommand(cmd.get_app());
         }
 

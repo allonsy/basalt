@@ -39,8 +39,9 @@ impl VaultKey {
 }
 
 impl Vault {
-    pub fn create_vault(client: &mut Client, path: &Path, payload: &[u8]) {
-        let keys = get_keys_for_path(client, path);
+    pub fn create_vault(keychain: &keyring::KeyChain, path: &Path, payload: &[u8]) {
+        let keys = get_keys_for_path(keychain, path);
+        println!("priming for {} keys", keys.len());
         let vault = Vault::seal_vault(payload, keys);
 
         vault.write_vault(path);
@@ -144,28 +145,36 @@ impl Vault {
     }
 }
 
-fn get_keys_for_path(client: &mut Client, path: &Path) -> Vec<PublicKey> {
+fn get_keys_for_path(keychain: &keyring::KeyChain, path: &Path) -> Vec<PublicKey> {
+    let store_dir_base = config::get_store_dir();
     let mut keys = Vec::new();
+    let mut path = store_dir_base.join(path);
+    if !path.is_dir() {
+        let par_path = path.parent();
+        if par_path.is_none() {
+            return keys;
+        }
+        path = par_path.unwrap().to_path_buf();
+    }
     let path = path.canonicalize();
     if path.is_err() {
         return keys;
     }
-    let path = path.unwrap().parent().map(|p| p.to_path_buf());
-    if path.is_none() {
+
+    let store_dir_par = config::get_store_dir().canonicalize();
+    if store_dir_par.is_err() {
         return keys;
     }
 
-    let keychain = keyring::KeyChain::validate_keychain(client);
-
-    let store_dir = config::get_store_dir().canonicalize();
-    if store_dir.is_err() {
+    let store_dir_par = store_dir_par.unwrap();
+    if store_dir_par.parent().is_none() {
         return keys;
     }
 
     let mut path = path.unwrap();
-    let store_dir = store_dir.unwrap();
+    let store_dir_par = store_dir_par.parent().unwrap().to_path_buf();
 
-    while path != store_dir {
+    while path != store_dir_par {
         let key_id_file = fs::File::open(path.join(config::KEY_ID_FILE_NAME));
 
         if key_id_file.is_ok() {
@@ -191,5 +200,9 @@ fn get_keys_for_path(client: &mut Client, path: &Path) -> Vec<PublicKey> {
         }
     }
 
-    keys
+    keychain
+        .validated_keys
+        .iter()
+        .map(|k| k.key.clone())
+        .collect()
 }
