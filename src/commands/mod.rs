@@ -1,4 +1,5 @@
 use clap::{crate_authors, crate_description, crate_version, App, ArgMatches};
+use serde_json::to_string;
 use std::collections::HashMap;
 
 use crate::{
@@ -9,6 +10,7 @@ use crate::{
 
 mod generate;
 mod insert;
+mod show;
 
 trait Subcommand {
     fn get_app(&self) -> App<'static, 'static>;
@@ -28,6 +30,7 @@ impl Application {
         );
 
         apps.insert("insert".to_string(), Box::new(insert::InsertCommand::new()));
+        apps.insert("show".to_string(), Box::new(show::ShowCommand::new()));
 
         Application { apps: apps }
     }

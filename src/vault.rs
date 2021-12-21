@@ -1,4 +1,3 @@
-use crate::client;
 use crate::client::Client;
 use crate::config;
 use crate::keys::keyring;
@@ -68,23 +67,22 @@ impl Vault {
         }
     }
 
-    pub fn open_vault_path(path: &Path) -> Result<Vec<u8>, ()> {
+    pub fn open_vault_path(path: &Path, client: &mut Client) -> Result<Vec<u8>, ()> {
         let vault = Vault::read_vault(path);
         if vault.is_none() {
             return Err(());
         }
         let vault = vault.unwrap();
 
-        vault.open_vault()
+        vault.open_vault(client)
     }
 
-    pub fn open_vault_secret(&self) -> Result<secretbox::Key, ()> {
+    pub fn open_vault_secret(&self, client: &mut Client) -> Result<secretbox::Key, ()> {
         let formatted_keys = self
             .keys
             .iter()
             .map(|k| (k.keyhash.clone(), k.payload.clone()))
             .collect();
-        let mut client = client::Client::new().map_err(|_| ())?;
         let decrypted_key = client.decrypt_message(formatted_keys);
         if decrypted_key.is_err() {
             eprintln!("Unable to decrypt secret keys");
@@ -99,8 +97,8 @@ impl Vault {
         Ok(parsed_key.unwrap())
     }
 
-    pub fn open_vault(&self) -> Result<Vec<u8>, ()> {
-        let secret_key = self.open_vault_secret()?;
+    pub fn open_vault(&self, client: &mut Client) -> Result<Vec<u8>, ()> {
+        let secret_key = self.open_vault_secret(client)?;
         secretbox::open(&self.ciphertext, &self.nonce, &secret_key)
     }
 

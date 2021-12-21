@@ -1,4 +1,3 @@
-use crate::client;
 use crate::client::Client;
 use crate::config;
 use crate::keys::keyring;
@@ -23,9 +22,9 @@ pub fn validate(client: &mut Client) -> Result<(), String> {
 
     let base_path = config::get_store_dir();
 
-    let client = client::Client::new()?;
+    let mut client = Client::new()?;
 
-    validate_dir(&base_path, &base_keys, &keychain, &client)?;
+    validate_dir(&base_path, &base_keys, &keychain, &mut client)?;
 
     Ok(())
 }
@@ -34,7 +33,7 @@ fn validate_dir(
     dir_path: &Path,
     base_keys: &Vec<public::PublicKey>,
     keychain: &keyring::KeyChain,
-    client: &client::Client,
+    client: &mut Client,
 ) -> Result<(), String> {
     let mut keys = Vec::new();
 
@@ -95,7 +94,7 @@ fn validate_dir(
 fn validate_vault(
     vault: &Vault,
     target_keys: &Vec<public::PublicKey>,
-    client: &client::Client,
+    client: &mut Client,
 ) -> Result<Option<Vault>, String> {
     let mut current_keys = HashSet::new();
     let mut wanted_keys = HashSet::new();
@@ -110,7 +109,7 @@ fn validate_vault(
 
     for key in target_keys {
         if !current_keys.contains(&key.hash()) {
-            return Ok(Some(reencrypt_vault(vault, target_keys)?));
+            return Ok(Some(reencrypt_vault(vault, target_keys, client)?));
         }
     }
 
@@ -139,9 +138,13 @@ fn validate_vault(
     Ok(None)
 }
 
-fn reencrypt_vault(vault: &Vault, target_keys: &Vec<public::PublicKey>) -> Result<Vault, String> {
+fn reencrypt_vault(
+    vault: &Vault,
+    target_keys: &Vec<public::PublicKey>,
+    client: &mut Client,
+) -> Result<Vault, String> {
     let secret_key = vault
-        .open_vault_secret()
+        .open_vault_secret(client)
         .map_err(|()| "unable to open vault".to_string())?;
 
     let mut new_keys = Vec::new();
