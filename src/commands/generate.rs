@@ -38,6 +38,7 @@ fn generate_key() {
 
     if !keychain.validated_keys.is_empty() {
         keyring::sign_key(&mut vec![disk_pub_key.clone()], &mut client);
+        disk_private_key.write_key();
     } else {
         disk_pub_key.write_key();
         disk_private_key.write_key();

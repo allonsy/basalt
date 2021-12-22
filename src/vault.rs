@@ -38,11 +38,15 @@ impl VaultKey {
 }
 
 impl Vault {
-    pub fn create_vault(keychain: &keyring::KeyChain, path: &Path, payload: &[u8]) {
-        let keys = get_keys_for_path(keychain, path);
+    pub fn create_vault(
+        keychain: &keyring::KeyChain,
+        path: &Path,
+        payload: &[u8],
+    ) -> Result<(), String> {
+        let keys = get_keys_for_path(keychain, path)?;
         let vault = Vault::seal_vault(payload, keys);
 
-        vault.write_vault(path);
+        vault.write_vault(path)
     }
 
     pub fn seal_vault(payload: &[u8], keys: Vec<PublicKey>) -> Vault {
@@ -103,7 +107,7 @@ impl Vault {
     }
 
     pub fn read_vault(path: &Path) -> Option<Self> {
-        let mut store_dir = config::get_store_dir().join(path);
+        let store_dir = config::get_store_dir().join(path);
 
         let vault_bytes = fs::read(&store_dir);
         if vault_bytes.is_err() {
@@ -120,52 +124,75 @@ impl Vault {
         Some(parsed_vault.unwrap())
     }
 
-    pub fn write_vault_raw(&self, path: &Path) {
+    pub fn write_vault_raw(&self, path: &Path) -> Result<(), String> {
+        create_vault_path(path)?;
         let vault_file = fs::File::create(&path);
         if vault_file.is_err() {
-            eprintln!("Unable to write to file: {:?}", path);
-            return;
+            return Err(format!("Unable to write to file: {:?}", path));
         }
         let vault_file = vault_file.unwrap();
 
         let serialization_result = serde_json::to_writer(vault_file, self);
 
         if serialization_result.is_err() {
-            eprintln!("Unable to serialize vault");
+            return Err("Unable to serialize vault".to_string());
         }
+        Ok(())
     }
 
-    pub fn write_vault(&self, path: &Path) {
+    pub fn write_vault(&self, path: &Path) -> Result<(), String> {
         let store_dir = config::get_store_dir().join(path);
 
-        self.write_vault_raw(&store_dir);
+        self.write_vault_raw(&store_dir)
     }
 }
 
-fn get_keys_for_path(keychain: &keyring::KeyChain, path: &Path) -> Vec<PublicKey> {
+fn create_vault_path(path: &Path) -> Result<(), String> {
+    let parent_dir = path.parent();
+    if parent_dir.is_none() {
+        return Err(format!("path: {:?} has no parent", path));
+    }
+
+    let parent_dir = parent_dir.unwrap();
+    if parent_dir.exists() {
+        Ok(())
+    } else {
+        fs::create_dir_all(parent_dir).map_err(|_| {
+            format!(
+                "Unable to create directory structure for path: {:?}",
+                parent_dir
+            )
+        })
+    }
+}
+
+fn get_keys_for_path(keychain: &keyring::KeyChain, path: &Path) -> Result<Vec<PublicKey>, String> {
     let store_dir_base = config::get_store_dir();
     let mut keys = Vec::new();
     let mut path = store_dir_base.join(path);
+
+    create_vault_path(&path)?;
+
     if !path.is_dir() {
         let par_path = path.parent();
         if par_path.is_none() {
-            return keys;
+            return Err(format!("no parent found for path: {:?}", path));
         }
         path = par_path.unwrap().to_path_buf();
     }
     let path = path.canonicalize();
     if path.is_err() {
-        return keys;
+        return Err(format!("unable to canonicalize path: {:?}", path));
     }
 
     let store_dir_par = config::get_store_dir().canonicalize();
     if store_dir_par.is_err() {
-        return keys;
+        return Err("Unable to canonicalize store path".to_string());
     }
 
     let store_dir_par = store_dir_par.unwrap();
     if store_dir_par.parent().is_none() {
-        return keys;
+        return Err("Unable to get parent for store path".to_string());
     }
 
     let mut path = path.unwrap();
@@ -187,19 +214,19 @@ fn get_keys_for_path(keychain: &keyring::KeyChain, path: &Path) -> Vec<PublicKey
                     keys.push(pubkey.unwrap());
                 }
             }
-            return keys;
+            return Ok(keys);
         } else {
             let parent = path.parent();
             if parent.is_none() {
-                return keys;
+                return Ok(keys);
             }
             path = parent.unwrap().to_path_buf();
         }
     }
 
-    keychain
+    Ok(keychain
         .validated_keys
         .iter()
         .map(|k| k.key.clone())
-        .collect()
+        .collect())
 }
