@@ -35,7 +35,6 @@ dependencies = [
  "serde_json",
  "sodiumoxide",
  "tempfile",
- "walkdir",
 ]
 
 [[package]]

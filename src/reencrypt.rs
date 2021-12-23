@@ -6,6 +6,7 @@ use crate::vault::Vault;
 use crate::vault::VaultKey;
 use std::collections::HashSet;
 use std::fs;
+use std::fs::read_dir;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -60,12 +61,17 @@ fn validate_dir(
         keys = base_keys.clone();
     }
 
-    for entry in walkdir::WalkDir::new(dir_path) {
+    let entries = read_dir(dir_path);
+    if entries.is_err() {
+        return Err(format!("Unable to read directory {:?}", dir_path));
+    }
+    let entries = entries.unwrap();
+    for entry in entries {
         if entry.is_ok() {
-            let entry = entry.unwrap();
+            let entry = entry.unwrap().path();
 
-            if entry.file_type().is_file() {
-                let vault_bytes = fs::read(entry.path());
+            if entry.is_file() {
+                let vault_bytes = fs::read(&entry);
 
                 if vault_bytes.is_ok() {
                     let vault_bytes = vault_bytes.unwrap();
@@ -78,12 +84,12 @@ fn validate_dir(
 
                         if new_vault.is_some() {
                             let new_vault = new_vault.unwrap();
-                            new_vault.write_vault_raw(entry.path());
+                            new_vault.write_vault_raw(&entry)?;
                         }
                     }
                 }
-            } else if entry.file_type().is_dir() {
-                validate_dir(entry.path(), &keys, keychain, client);
+            } else if entry.is_dir() {
+                validate_dir(&entry, &keys, keychain, client)?;
             }
         }
     }
