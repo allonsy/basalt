@@ -1,15 +1,14 @@
-use clap::{crate_authors, crate_description, crate_version, App, ArgMatches};
-use serde_json::to_string;
-use std::collections::HashMap;
-
 use crate::{
     client::{self, Client},
     keys::keyring::{self, KeyChain},
     util,
 };
+use clap::{crate_authors, crate_description, crate_version, App, ArgMatches};
+use std::collections::HashMap;
 
 mod generate;
 mod insert;
+mod reencrypt;
 mod show;
 
 trait Subcommand {
@@ -31,6 +30,10 @@ impl Application {
 
         apps.insert("insert".to_string(), Box::new(insert::InsertCommand::new()));
         apps.insert("show".to_string(), Box::new(show::ShowCommand::new()));
+        apps.insert(
+            "reencrypt".to_string(),
+            Box::new(reencrypt::ReencryptCommand::new()),
+        );
 
         Application { apps: apps }
     }

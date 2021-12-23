@@ -1,14 +1,11 @@
 use std::{
-    io::{stdin, stdout, Read, Write},
+    io::{stdout, Write},
     path::PathBuf,
 };
 
 use clap::{App, Arg};
 
-use crate::{
-    util::{self, exit},
-    vault,
-};
+use crate::{util::exit, vault};
 
 use super::Subcommand;
 
@@ -23,7 +20,7 @@ impl ShowCommand {
 
 impl Subcommand for ShowCommand {
     fn get_app(&self) -> App<'static, 'static> {
-        App::new("show").arg(
+        App::new("show").about("decrypt a value in the store").arg(
             Arg::with_name(PATH_ARG_NAME)
                 .value_name("path")
                 .required(true)

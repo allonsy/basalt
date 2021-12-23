@@ -1,13 +1,10 @@
+use super::Subcommand;
+use crate::{util, vault};
+use clap::{App, Arg};
 use std::{
     io::{stdin, Read},
     path::PathBuf,
 };
-
-use clap::{App, Arg};
-
-use crate::{util, vault};
-
-use super::Subcommand;
 
 const PATH_ARG_NAME: &'static str = "PATH";
 pub struct InsertCommand {}
@@ -20,12 +17,14 @@ impl InsertCommand {
 
 impl Subcommand for InsertCommand {
     fn get_app(&self) -> App<'static, 'static> {
-        App::new("insert").arg(
-            Arg::with_name(PATH_ARG_NAME)
-                .value_name("path")
-                .required(true)
-                .help("path in the store to insert the secret"),
-        )
+        App::new("insert")
+            .about("Insert (encrypt) a value in the store")
+            .arg(
+                Arg::with_name(PATH_ARG_NAME)
+                    .value_name("path")
+                    .required(true)
+                    .help("path in the store to insert the secret"),
+            )
     }
 
     fn run_cmd(&self, matches: &clap::ArgMatches) {
@@ -42,6 +41,10 @@ impl Subcommand for InsertCommand {
         let mut client = super::get_client();
         let keychain = super::get_keyring(&mut client);
 
-        vault::Vault::create_vault(&keychain, &path, &contents);
+        let res = vault::Vault::create_vault(&keychain, &path, &contents);
+
+        if res.is_err() {
+            util::exit(&res.err().unwrap(), 1);
+        }
     }
 }

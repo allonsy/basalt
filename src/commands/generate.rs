@@ -1,9 +1,8 @@
-use clap::App;
-
 use crate::{
     keys::{self, keyring},
     menu::prompt,
 };
+use clap::App;
 
 use super::Subcommand;
 
