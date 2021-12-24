@@ -98,30 +98,33 @@ impl Clone for SessionState {
     }
 }
 
-pub fn start_agent() {
+pub fn start_agent() -> Result<(), String> {
     let socket_path = config::get_agent_socket_path();
 
     if socket_path.exists() {
-        return;
+        return Ok(());
     }
 
     let listener = UnixListener::bind(socket_path);
 
     if listener.is_err() {
-        return;
+        return Err(format!(
+            "Unable to bind to socket: {}",
+            listener.err().unwrap()
+        ));
     }
 
-    let fork_res = fork::daemon(true, false);
+    let fork_res = fork::daemon(true, true);
 
     if fork_res.is_err() {
-        return;
+        return Err("Unable to fork process".to_string());
     }
 
     let fork_res = fork_res.unwrap();
 
     match fork_res {
         fork::Fork::Parent(_) => {
-            return;
+            return Ok(());
         }
         _ => {}
     }
@@ -138,6 +141,8 @@ pub fn start_agent() {
             Err(_) => {}
         }
     }
+
+    std::process::exit(0);
 }
 
 fn handle_stream(stream: UnixStream, mut state: SessionState) {

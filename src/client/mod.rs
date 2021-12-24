@@ -1,7 +1,5 @@
 use crate::agent;
 use crate::config;
-use crate::keys::private::OnDiskPrivateKey;
-use glob::glob;
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 
@@ -12,7 +10,7 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> Result<Client, String> {
-        agent::start_agent();
+        agent::start_agent()?;
 
         let connection = UnixStream::connect(config::get_agent_socket_path());
         if connection.is_err() {
