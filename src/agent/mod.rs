@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fs;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
@@ -98,11 +99,16 @@ impl Clone for SessionState {
     }
 }
 
-pub fn start_agent() -> Result<(), String> {
+pub fn start_agent(restart: bool) -> Result<(), String> {
     let socket_path = config::get_agent_socket_path();
 
     if socket_path.exists() {
-        return Ok(());
+        if restart {
+            fs::remove_file(&socket_path)
+                .map_err(|e| format!("Unable to restart socket: {}", e))?;
+        } else {
+            return Ok(());
+        }
     }
 
     let listener = UnixListener::bind(socket_path);

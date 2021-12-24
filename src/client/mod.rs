@@ -1,5 +1,6 @@
 use crate::agent;
 use crate::config;
+use std::fs;
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 
@@ -10,14 +11,18 @@ pub struct Client {
 
 impl Client {
     pub fn new() -> Result<Client, String> {
-        agent::start_agent()?;
+        agent::start_agent(false)?;
 
-        let connection = UnixStream::connect(config::get_agent_socket_path());
+        let mut connection = UnixStream::connect(config::get_agent_socket_path());
         if connection.is_err() {
-            return Err(format!(
-                "Unable to connect to agent: {}",
-                connection.err().unwrap()
-            ));
+            agent::start_agent(true)?;
+            connection = UnixStream::connect(config::get_agent_socket_path());
+            if connection.is_err() {
+                return Err(format!(
+                    "Unable to connect to agent: {}",
+                    connection.err().unwrap()
+                ));
+            }
         }
 
         let stream = connection.unwrap();
